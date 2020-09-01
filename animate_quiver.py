@@ -1,7 +1,7 @@
 '''
 NAME:           animate_quiver.py
 AUTHOR:         swjtang  
-DATE:           18 Jul 2020
+DATE:           31 Aug 2020
 DESCRIPTION:    Plots an animated quiver plot
 INPUTS:             xx/yy    = positional inputs array[nx], array[ny]
                     data_U/V = vector inputs with array[ny,nx,nt]
@@ -15,8 +15,8 @@ OPTIONAL PARAMS:    cmap     = color map used to plot the arrows
 import numpy         as np
 import lib.fname_tds as fn
 from matplotlib import animation, cm, pyplot as plt
-
-''' to reload a module :    
+'''----------------------------------------------------------------------------
+to reload module:
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 '''
 NAME:           average_fft_data.py
 AUTHOR:         swjtang  
-DATE:           18 Jul 2020
+DATE:           31 Aug 2020
 DESCRIPTION:    Function to average FFT
 REQUIRED INPUTS:    data = A formatted numpy array in order of (nt,nx,ny,nshots,nchan)
                     time = A formatted numpy array with nt elements
@@ -17,8 +17,8 @@ import numpy as np
 import os
 import scipy.constants as const
 from matplotlib import pyplot as plt
-
-''' to reload a module :    
+'''----------------------------------------------------------------------------
+to reload module:  
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------

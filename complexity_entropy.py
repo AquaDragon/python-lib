@@ -1,22 +1,22 @@
 '''
-NAME:        	complexity_entropy.py
-AUTHOR:      	swjtang  
-DATE:        	25 Jul 2020
-DESCRIPTION:    Translation project for CH plane analysis (from IDL)
-INPUTS:			data = A formatted numpy array with dimensions (nt)
+NAME:           complexity_entropy.py
+AUTHOR:         swjtang  
+DATE:           31 Aug 2020
+DESCRIPTION:    Translated CH plane program written in IDL
+INPUTS:         data = A formatted numpy array with dimensions (nt)
+                dim  = dimensionality (usually 3 to 7)
 '''
 import matplotlib.pyplot as plt
 import numpy             as np
 import lib.toolbox       as tbx
 from scipy.integrate import odeint
-#from mpl_toolkits.mplot3d import Axes3D
-
-''' to reload a module :    
+'''----------------------------------------------------------------------------
+to reload module:    
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------
 '''
-##### calculate permutation probability distribution
+#### calculate permutation probability distribution
 def permutation_pj(data, dim=5):
     npoints     = len(data)-dim+1
     d_factorial = np.math.factorial(dim)
@@ -88,7 +88,7 @@ def minmax_CH_plot(dim=5, npoints=100):
     pmin_sum0 = [1/2 * ((1-jj)/(df-1) + 1/df) for jj in pmax0]
     entropy_min  = [ii * np.log(df)/np.log(2) for ii in Hmin_arr]
     sum_entropy0 = [-(aa*np.log(aa) + (df-1)*bb*np.log(bb)) / np.log(2) for aa, bb in \
-    				zip(pmax_sum0, pmin_sum0)]
+                    zip(pmax_sum0, pmin_sum0)]
     shanDmin     = [aa - bb/2 - uniform_entropy/2 for aa,bb in zip(sum_entropy0, entropy_min)]
     Cmin_arr     = [q0*aa*bb for aa,bb in zip(shanDmin, Hmin_arr)]
     
@@ -113,8 +113,8 @@ def minmax_CH_plot(dim=5, npoints=100):
         pmin_sum1 = [1/2 * ((1-jj)/(df-mm-1) + 1/df) for jj in pmax1]
         pzero_sum = (1/df)/2
         sum_entropy1 = [-(aa*np.log(aa) + (df-mm-1)*bb*np.log(bb) + \
-        				mm*pzero_sum*np.log(pzero_sum))/np.log(2) \
-        				for aa,bb in zip(pmax_sum1,pmin_sum1)]
+                        mm*pzero_sum*np.log(pzero_sum))/np.log(2) \
+                        for aa,bb in zip(pmax_sum1,pmin_sum1)]
         shanDmax     = [aa - bb/2 - uniform_entropy/2 for aa, bb in zip(sum_entropy1, entropy_max)]
         Cmax[mm,:]   = [q0*aa*bb for aa,bb in zip(shanDmax, Hmax[mm,:])]
     
@@ -125,47 +125,47 @@ def minmax_CH_plot(dim=5, npoints=100):
     return Hmin_arr, Cmin_arr, Hmax_arr[jjj], Cmax_arr[jjj]
 
 def plot_CH_plane(dim=5, blank=0):
-	Hmin,Cmin,Hmax,Cmax= minmax_CH_plot(dim=dim, npoints=100)
+    Hmin,Cmin,Hmax,Cmax= minmax_CH_plot(dim=dim, npoints=100)
 
-	fig = tbx.prefig(figsize=[16,9], xlabel='BP entropy $H$', ylabel='JS complexity $C_{JS}$')
-	plt.title('Complexity$-$Entropy causality plane ($d=${0})'.format(dim), fontsize=30)
-	plt.plot(Hmin,Cmin, 'c', linewidth=2)
-	plt.plot(Hmax,Cmax, 'c', linewidth=2)
+    fig = tbx.prefig(figsize=[16,9], xlabel='BP entropy $H$', ylabel='JS complexity $C_{JS}$')
+    plt.title('Complexity$-$Entropy causality plane ($d=${0})'.format(dim), fontsize=30)
+    plt.plot(Hmin,Cmin, 'c', linewidth=2)
+    plt.plot(Hmax,Cmax, 'c', linewidth=2)
 
-	if blank != 0:
-		print('\r Calculating CH for Hénon map...            ', end='')
-		C_henon, H_henon = henon_map(10000, dim=dim)
-		plt.plot(H_henon, C_henon, 'D', markersize=12, fillstyle='none', label='Hénon map')
+    if blank != 0:
+        print('\r Calculating CH for Hénon map...            ', end='')
+        C_henon, H_henon = henon_map(10000, dim=dim)
+        plt.plot(H_henon, C_henon, 'D', markersize=12, fillstyle='none', label='Hénon map')
 
-		print('\r Calculating CH for Logistic map...         ', end='')
-		C_logis, H_logis = logistic_map(10000, dim=dim)
-		plt.plot(H_logis, C_logis, '^', markersize=15, fillstyle='none', label='Logistic map')
+        print('\r Calculating CH for Logistic map...         ', end='')
+        C_logis, H_logis = logistic_map(10000, dim=dim)
+        plt.plot(H_logis, C_logis, '^', markersize=15, fillstyle='none', label='Logistic map')
 
-		print('\r Calculating CH for Ricker population map...', end='')
-		C_ricker, H_ricker = ricker_map(10000, dim=dim)
-		plt.plot(H_ricker, C_ricker, 's', markersize=15, fillstyle='none', label='Ricker population map')
+        print('\r Calculating CH for Ricker population map...', end='')
+        C_ricker, H_ricker = ricker_map(10000, dim=dim)
+        plt.plot(H_ricker, C_ricker, 's', markersize=15, fillstyle='none', label='Ricker population map')
 
-		print('\r Calculating CH for Gingerbreadman map...   ', end='')
-		C_gbman, H_gbman = gbman_map(10000, dim=dim)
-		plt.plot(H_gbman, C_gbman, '+', markersize=15, fillstyle='none', label='Gingerbreadman map')
+        print('\r Calculating CH for Gingerbreadman map...   ', end='')
+        C_gbman, H_gbman = gbman_map(10000, dim=dim)
+        plt.plot(H_gbman, C_gbman, '+', markersize=15, fillstyle='none', label='Gingerbreadman map')
 
-		print('\r Calculating CH for sine wave...            ', end='')
-		C_sine, H_sine = sine_wave(10000, dim=dim)
-		plt.plot(H_sine, C_sine, 'x', markersize=15, fillstyle='none', label='Sine wave')
+        print('\r Calculating CH for sine wave...            ', end='')
+        C_sine, H_sine = sine_wave(10000, dim=dim)
+        plt.plot(H_sine, C_sine, 'x', markersize=15, fillstyle='none', label='Sine wave')
 
-		print('\r Calculating CH for Lorenz attractor...     ', end='')
-		C_lorenz, H_lorenz = lorenz_attractor(sigma=10, beta=8/3, rho=28, dim=dim)
-		plt.plot(H_lorenz, C_lorenz, '8', markersize=15, fillstyle='none', label='Lorenz attractor')
-		
-		print('\r Calculating CH for double pendulum...      ', end='')
-		C_dbpd, H_dbpd = double_pendulum(m=1, l=1, g=10, dim=dim)
-		plt.plot(H_dbpd, C_dbpd, '*', markersize=15, fillstyle='none', label='Double pendulum')
-		
-		C_fBm, H_fBm = fBm_gen(dim=dim)
-		plt.plot(H_fBm, C_fBm, '.', label='fractional Brownian motion (fBm)')
+        print('\r Calculating CH for Lorenz attractor...     ', end='')
+        C_lorenz, H_lorenz = lorenz_attractor(sigma=10, beta=8/3, rho=28, dim=dim)
+        plt.plot(H_lorenz, C_lorenz, '8', markersize=15, fillstyle='none', label='Lorenz attractor')
+        
+        print('\r Calculating CH for double pendulum...      ', end='')
+        C_dbpd, H_dbpd = double_pendulum(m=1, l=1, g=10, dim=dim)
+        plt.plot(H_dbpd, C_dbpd, '*', markersize=15, fillstyle='none', label='Double pendulum')
+        
+        C_fBm, H_fBm = fBm_gen(dim=dim)
+        plt.plot(H_fBm, C_fBm, '.', label='fractional Brownian motion (fBm)')
 
-	plt.legend(fontsize=15)
-	return fig
+    plt.legend(fontsize=15)
+    return fig
 
 #### --------------------------------------------------------------------------
 #### Some mathematical maps of chaotic systems
@@ -219,97 +219,97 @@ def gbman_map(npoints, x0=1.4, y0=3.0, dim=5):
 #### --------------------------------------------------------------------------
 #### SINE WAVE
 def sine_wave(npoints, cycles=5, dim=5):
-	xarr = [np.sin(cycles*aa*2*np.pi/npoints) for aa in np.arange(npoints)]
-	return calculate_ch(xarr, dim=dim)
+    xarr = [np.sin(cycles*aa*2*np.pi/npoints) for aa in np.arange(npoints)]
+    return calculate_ch(xarr, dim=dim)
 
 #### --------------------------------------------------------------------------
 #### LORENZ ATTRACTOR
 #### https://scipython.com/blog/the-lorenz-attractor/
 def lorenz_deriv(X, t, sigma=10, beta=8/3, rho=28):
-	xx, yy, zz = X
-	xderiv = sigma*(yy - xx)
-	yderiv = xx*(rho-zz) - yy
-	zderiv = xx*yy - beta*zz
-	return xderiv, yderiv, zderiv
+    xx, yy, zz = X
+    xderiv = sigma*(yy - xx)
+    yderiv = xx*(rho-zz) - yy
+    zderiv = xx*yy - beta*zz
+    return xderiv, yderiv, zderiv
 
 def lorenz_attractor(sigma=10, beta=8/3, rho=28, dim=5): ##show=0
-	tmax, n    = 2000, 10000
-	x0, y0, z0 = 0, 1, 0.5
-	t = np.linspace(0, tmax, n)
-	f = odeint(lorenz_deriv, (x0,y0,z0), t, args=(sigma,beta,rho))
-	
-	# if show != 0:
-	# 	x,y,z = f.T
-	# 	# Plot the Lorenz attractor using a Matplotlib 3D projection
-	# 	fig = plt.figure(figsize=[9,9])
-	# 	ax  = fig.gca(projection='3d')
+    tmax, n    = 2000, 10000
+    x0, y0, z0 = 0, 1, 0.5
+    t = np.linspace(0, tmax, n)
+    f = odeint(lorenz_deriv, (x0,y0,z0), t, args=(sigma,beta,rho))
+    
+    # if show != 0:
+    #   x,y,z = f.T
+    #   # Plot the Lorenz attractor using a Matplotlib 3D projection
+    #   fig = plt.figure(figsize=[9,9])
+    #   ax  = fig.gca(projection='3d')
 
-	# 	# Make the line multi-coloured by plotting it in segments of length s which
-	# 	# change in colour across the whole time series.
-	# 	s = 10
-	# 	c = np.linspace(0,1,n)
-	# 	for i in range(0,n-s,s):
-	# 	    ax.plot(x[i:i+s+1], y[i:i+s+1], z[i:i+s+1], color=(1,c[i],0), alpha=0.4)
+    #   # Make the line multi-coloured by plotting it in segments of length s which
+    #   # change in colour across the whole time series.
+    #   s = 10
+    #   c = np.linspace(0,1,n)
+    #   for i in range(0,n-s,s):
+    #       ax.plot(x[i:i+s+1], y[i:i+s+1], z[i:i+s+1], color=(1,c[i],0), alpha=0.4)
 
-	# 	# Remove all the axis clutter, leaving just the curve.
-	# 	ax.set_axis_off()
+    #   # Remove all the axis clutter, leaving just the curve.
+    #   ax.set_axis_off()
 
-	return calculate_ch(f[:,0], dim=dim)
+    return calculate_ch(f[:,0], dim=dim)
 
 #### --------------------------------------------------------------------------
 #### DOUBLE PENDULUM
 def double_pendulum_deriv(X, t, m=1, l=1, g=10):
-	thx0, thy0, thdx0, thdy0 = X
-	thxd1 = 6.0/(m*l**2) * (2*thdx0 - 3*np.cos(thx0-thy0)*thdy0)/(16-9*(np.cos(thx0-thy0))**2)
-	thyd1 = 6.0/(m*l**2) * (8*thdy0 - 3*np.cos(thx0-thy0)*thdx0)/(16-9*(np.cos(thx0-thy0))**2)
-	pxd1 = -0.5*m*l**2  * (thxd1*thyd1*np.sin(thx0-thy0) + 3*g/l*np.sin(thx0))
-	pyd1 = -0.5*m*l**2  * (-thxd1*thyd1*np.sin(thx0-thy0) + g/l*np.sin(thy0))
-	return thxd1, thyd1, pxd1, pyd1
+    thx0, thy0, thdx0, thdy0 = X
+    thxd1 = 6.0/(m*l**2) * (2*thdx0 - 3*np.cos(thx0-thy0)*thdy0)/(16-9*(np.cos(thx0-thy0))**2)
+    thyd1 = 6.0/(m*l**2) * (8*thdy0 - 3*np.cos(thx0-thy0)*thdx0)/(16-9*(np.cos(thx0-thy0))**2)
+    pxd1 = -0.5*m*l**2  * (thxd1*thyd1*np.sin(thx0-thy0) + 3*g/l*np.sin(thx0))
+    pyd1 = -0.5*m*l**2  * (-thxd1*thyd1*np.sin(thx0-thy0) + g/l*np.sin(thy0))
+    return thxd1, thyd1, pxd1, pyd1
 
 def double_pendulum(m=1, l=1, g=10, dim=5):
-	tmax, n = 2000, 10000
-	thx0, thy0, thdx0, thdy0 = np.pi/2, np.pi/2, 0, 0
-	t = np.linspace(0, tmax, n)
-	f = odeint(double_pendulum_deriv, (thx0, thy0, thdx0, thdy0), t, args=(m, l, g))
+    tmax, n = 2000, 10000
+    thx0, thy0, thdx0, thdy0 = np.pi/2, np.pi/2, 0, 0
+    t = np.linspace(0, tmax, n)
+    f = odeint(double_pendulum_deriv, (thx0, thy0, thdx0, thdy0), t, args=(m, l, g))
 
-	x = [np.sin(aa) + np.sin(bb) for aa, bb in zip(f[:,0], f[:,1])]
-	# y = [np.sin(aa) + np.sin(bb) for aa, bb in zip(f[:,0], f[:,1])]
+    x = [np.sin(aa) + np.sin(bb) for aa, bb in zip(f[:,0], f[:,1])]
+    # y = [np.sin(aa) + np.sin(bb) for aa, bb in zip(f[:,0], f[:,1])]
 
-	# c = np.linspace(0,1,len(aaa[:,0]))
-	# for ii in range(len(aaa[:,0])):
-	# 	plt.plot(x[ii],-y[ii], '.', color=(1,c[ii],0))
+    # c = np.linspace(0,1,len(aaa[:,0]))
+    # for ii in range(len(aaa[:,0])):
+    #   plt.plot(x[ii],-y[ii], '.', color=(1,c[ii],0))
 
-	return calculate_ch(x, dim=dim)
+    return calculate_ch(x, dim=dim)
 
 #### --------------------------------------------------------------------------
 #### FRACTIONAL BROWNIAN MOTION (fBm)
 def fBm_gen(dim=5):
-	nhe     = 500								 # number of Hurst exponents to generate
-	he      = [ii/(nhe-1) for ii in range(nhe)]  # define a range of hurst exponents
-	siglen  = 2056                               # length of the fBm signals
+    nhe     = 500                                # number of Hurst exponents to generate
+    he      = [ii/(nhe-1) for ii in range(nhe)]  # define a range of hurst exponents
+    siglen  = 2056                               # length of the fBm signals
 
-	freq = [((ii/2)+1)*2*np.pi/siglen for ii in range(siglen)] # angular frequency 0 to pi
-	data = np.empty([nhe,2])
+    freq = [((ii/2)+1)*2*np.pi/siglen for ii in range(siglen)] # angular frequency 0 to pi
+    data = np.empty([nhe,2])
 
-	for ii in range(nhe):
-		tbx.show_progress_bar([ii+1], [nhe], label=['Hurst exponents'], header='Generating fBm ')
-		h2   = 2*he[ii]
-		sdf  = np.array([(2*jj)**(-1-h2) for jj in freq])
-		sdf0 = sdf[0]
-		sdf  = np.append(sdf, sdf0)
+    for ii in range(nhe):
+        tbx.show_progress_bar([ii+1], [nhe], label=['Hurst exponents'], header='Generating fBm ')
+        h2   = 2*he[ii]
+        sdf  = np.array([(2*jj)**(-1-h2) for jj in freq])
+        sdf0 = sdf[0]
+        sdf  = np.append(sdf, sdf0)
 
-		wr  = [np.random.uniform(0,1) for jj in range(siglen)]
-		v   = np.array(np.zeros(siglen), dtype=complex)	# prep FFT
-		mid = int(siglen/2)
-		v[0]            = np.sqrt(sdf0 * wr[0])
-		v[1:mid]        = [np.sqrt(0.5*sdf[jj])* np.complex(wr[2*jj-1],wr[2*jj]) for jj in range(1, mid)]
-		v[mid]          = np.sqrt(sdf[mid])* wr[siglen-1]
-		v[mid+1:siglen] = [np.conj(v[siglen-jj]) for jj in range(mid+1, siglen)]
+        wr  = [np.random.uniform(0,1) for jj in range(siglen)]
+        v   = np.array(np.zeros(siglen), dtype=complex) # prep FFT
+        mid = int(siglen/2)
+        v[0]            = np.sqrt(sdf0 * wr[0])
+        v[1:mid]        = [np.sqrt(0.5*sdf[jj])* np.complex(wr[2*jj-1],wr[2*jj]) for jj in range(1, mid)]
+        v[mid]          = np.sqrt(sdf[mid])* wr[siglen-1]
+        v[mid+1:siglen] = [np.conj(v[siglen-jj]) for jj in range(mid+1, siglen)]
 
-		tout       = np.real(np.fft.fft(v))
-		data[ii,:] = calculate_ch(tout, dim=dim)
+        tout       = np.real(np.fft.fft(v))
+        data[ii,:] = calculate_ch(tout, dim=dim)
 
-	c_arr, h_arr = data.T
-	index        = np.argsort(h_arr)
+    c_arr, h_arr = data.T
+    index        = np.argsort(h_arr)
 
-	return c_arr[index], h_arr[index]
+    return c_arr[index], h_arr[index]

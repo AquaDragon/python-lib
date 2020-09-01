@@ -8,7 +8,7 @@ import numpy as np
 import os, copy, scipy
 from matplotlib import pyplot as plt
 '''----------------------------------------------------------------------------
-to reload module :    
+to reload module:
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------

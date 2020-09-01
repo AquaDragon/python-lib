@@ -1,18 +1,18 @@
 '''
 IDL CONJUGATE:  find_multiref_phase.pro
-NAME:        	find_multiref_phase.py
-AUTHOR:      	swjtang  
-DATE:        	18 Jul 2020
+NAME:           find_multiref_phase.py
+AUTHOR:         swjtang  
+DATE:           31 Aug 2020
 DESCRIPTION:    (Analysis) Only for XY planes.
-INPUTS:			data = A formatted numpy array in order of (nt,nx,ny,nshots,nchan)
+INPUTS:         data = A formatted numpy array in order of (nt,nx,ny,nshots,nchan)
 '''
 import numpy          as np
 import lib.toolbox    as tbx
 import lib.errorcheck as echk
 from matplotlib import pyplot as plt
 from scipy import signal
-
-''' to reload a module :    
+'''----------------------------------------------------------------------------
+to reload a module:    
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------

@@ -32,14 +32,15 @@ def analyzeIV(voltage, current, res=1, area=1, gain_curr=1, gain_volt=1, lim=[0.
     ### constants -------------------------------------------------------------
     amu = const.physical_constants['atomic mass constant'][0]
     ### program parameters ----------------------------------------------------
-    sm        = 200    # isat index
+    sm        = 500    # isat index
     flag_flip = 0      # indicator to check if current was flipped
     ### -----------------------------------------------------------------------
 
     ### get values of voltage and current
-    isat = np.mean(current[:sm])
+    isat0 = np.mean(current[:sm])
     volt = gain_volt*tbx.smooth(voltage, nwindow=351, polyn=2)
-    curr = gain_curr/res*tbx.smooth(current-isat, nwindow=351, polyn=2)
+    curr = gain_curr/res*tbx.smooth(current-isat0, nwindow=351, polyn=2)
+    isat = gain_curr/res*isat0
 
     ### checks if current was flipped (set electron current positive)
     if np.mean(curr[:100]) > np.mean(curr[-100:]):
@@ -75,23 +76,23 @@ def analyzeIV(voltage, current, res=1, area=1, gain_curr=1, gain_volt=1, lim=[0.
     out1  = poly1(newx1)
 
     if noplot == 0 :
-        plt.plot(volt[newx1], out1, '--', label='transition')
+        plt.plot(volt[newx1], out1, '--', color='orange', label='transition')
 
     ### analysis: exponential region ------------------------------------------
     folding = 1
     while folding < 4:
         yfold   = y25/(np.exp(folding))   # value # folding lengths below y25
         argfold = tbx.value_locate_arg(curr, yfold)
-        x2 = np.arange(argfold, arg25)
-        y2 = curr[argfold:arg25]
+        x2 = np.arange(argfold, arg75)
+        y2 = curr[argfold:arg75]
 
         try:
             poly_der1 = np.poly1d([poly_arg1[1],poly_arg1[2]*2])  ## derivative of poly1
-            etest = y25/poly_der1(arg25)
-            popt, pcov = curve_fit(f_exp, x2, y2, p0=(y25,etest/x2[-1],0))
+            etest = y75/poly_der1(arg75)
+            popt, pcov = curve_fit(f_exp, x2, y2, p0=(y75,etest/x2[-1],0))
             out2 = f_exp(x2, *popt)
             if noplot == 0 :
-                plt.plot(volt[x2], out2, '--', label='exponential')
+                plt.plot(volt[x2], out2, '--', color='red', label='exponential')
             break
         except:
             folding +=1
@@ -103,10 +104,10 @@ def analyzeIV(voltage, current, res=1, area=1, gain_curr=1, gain_volt=1, lim=[0.
     index_Te  = int(1/popt[1])
     if index_Te+arg25 >= len(volt) or index_Te < 0: 
         return reject(volt, curr, reason='garbage electron temperature', quiet=quiet)
-    plasma_Te = 2 / (volt[index_Te+arg25] - volt[arg25])   
+    plasma_Te = volt[index_Te+arg25] - volt[arg25]
     v_thermal = 4.19e7*np.sqrt(abs(plasma_Te))  ## [cm/s]
     if quiet == 0:
-        print('electron Temp    = {0:.3f}     [eV]'.format(plasma_Te))
+        print('electron Temp    = {0:.2f}     [eV]'.format(plasma_Te))
 
     ### analysis: electron saturation region ----------------------------------
     x3 = np.arange(arg95, len(volt))
@@ -118,7 +119,7 @@ def analyzeIV(voltage, current, res=1, area=1, gain_curr=1, gain_volt=1, lim=[0.
     out3  = poly3(newx3)
 
     if noplot == 0 :
-        plt.plot(volt[newx3], out3, '--', label='electron saturation')
+        plt.plot(volt[newx3], out3, '--', color='green', label='electron saturation')
 
     ### the intersection of out1 and out3 is the plasma potential
     coeff = poly_arg1 - np.append(0, poly_arg3)

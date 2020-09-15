@@ -1,30 +1,30 @@
 '''
-NAME:           read_lapd_data.pro
+NAME:           read_lapd_data.py
 AUTHOR:         swjtang
-DATE:           31 Aug 2020
+DATE:           15 Sep 2020
 DESCRIPTION:    functionally similar to read_lapd_data_newsis_ver4.pro (IDL)
 INPUTS:         
 '''
 import h5py, re
-import numpy as np
-import lib.toolbox as tbx
-from .read_lapd_lib import *  # import functions from library
+import numpy             as np
+import lib.toolbox       as tbx
+import lib.read_lapd_lib as lapdlib  # import functions from library
 
 def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
     xrange=None, yrange=None, zrange=None, nstep=1, sisid=None, tchannum=0, motionid=0, quiet=0):
 
     # check devices being used in the data acquisition ----------------------------------
-    device_check = check_devices(fname)
+    device_check = lapdlib.check_devices(fname)
 
     # check motion list devices ---------------------------------------------------------
     if device_check[0]:  # 6K Compumotor
-        motion_data = lapd_6k_config(fname, motionid=motionid, quiet=quiet)
+        motion_data = lapdlib.lapd_6k_config(fname, motionid=motionid, quiet=quiet)
         tbx.qprint(quiet, 'Reading motion list from module:  6K Compumotor')
     elif device_check[6]:  # NI_XZ
-        motion_data = lapd_ni_xz_config(fname, motionid=motionid, quiet=quiet)
+        motion_data = lapdlib.lapd_ni_xz_config(fname, motionid=motionid, quiet=quiet)
         tbx.qprint(quiet, 'Reading motion list from module:  NI_XZ')
     elif device_check[7]: # NI_XYZ
-        motion_data = lapd_ni_xyz_config(fname, motionid=motionid, quiet=quiet)
+        motion_data = lapdlib.lapd_ni_xyz_config(fname, motionid=motionid, quiet=quiet)
         tbx.qprint(quiet, 'Reading motion list from module:  NI_XYZ')
         daqconfig   = 4
     else:
@@ -43,7 +43,7 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
 
     # check if SIS crate active -----------------------------------------------------------
     if device_check[1]:
-        siscrate_info = lapd_siscrate_config(fname, quiet=quiet)
+        siscrate_info = lapdlib.lapd_siscrate_config(fname, quiet=quiet)
         en_flag_3302 = (siscrate_info['sis3302_info'] != None)
         en_flag_3305 = (siscrate_info['sis3305_info'] != None)
 
@@ -184,8 +184,8 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
     #ignore option for SIS 3301
 
     data_group_name = '/Raw data + config/SIS crate/'
-    data_subgroup_names = get_subgroup_names(fname, data_group_name)
-    data_dataset_names  = get_dataset_names(fname, data_group_name)
+    data_subgroup_names = lapdlib.get_subgroup_names(fname, data_group_name)
+    data_dataset_names  = lapdlib.get_dataset_names(fname, data_group_name)
 
     # tbx.qprint(quiet, data_subgroup_names, data_dataset_names)
 
@@ -216,10 +216,10 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
 
                         iiboard, iichan  = boardlist[rchan[jj]], chanlist[rchan[jj]]
                         if sisid == 3302:
-                            temp = read_sis3302_shot(fname, data_group_name, \
+                            temp = lapdlib.read_sis3302_shot(fname, data_group_name, \
                                 iboard=iiboard, ichan=iichan, index=iindex)
                         elif sisid == 3305:
-                            temp = read_sis3305_shot(fname, data_group_name, \
+                            temp = lapdlib.read_sis3305_shot(fname, data_group_name, \
                                 iboard=iiboard, ichan=iichan, index=iindex)
 
                         if daqconfig == 0:
@@ -247,6 +247,6 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
 
         'chanid'   : chanlist,
         'channame' : dtypelist,
-        'desc'     : get_description(fname)
+        'desc'     : lapdlib.get_description(fname)
     }
     return temp

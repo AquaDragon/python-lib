@@ -1,13 +1,13 @@
 '''
-NAME:           read_lapd_lib.pro
+NAME:           read_lapd_lib.py
 AUTHOR:         swjtang
-DATE:           31 Aug 2020
+DATE:           15 Sep 2020
 DESCRIPTION:    A library of helper functions used to read the hdf5 file from LAPD
 INPUTS:         
 '''
 import h5py, re
-import numpy as np
-import lib.toolbox as tbx
+import numpy                  as np
+import lib.toolbox            as tbx
 from matplotlib import pyplot as plt
 
 #### Check devices used to write data file (auxillary function) -------------------------

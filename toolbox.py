@@ -1,18 +1,17 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang  
-DATE:           31 Aug 2020
+DATE:           18 Nov 2020
 DESCRIPTION:    A toolbox of commonly used functions.
 '''
 import numpy as np
-import os, copy, scipy
+import os, copy, scipy.signal
 from matplotlib import pyplot as plt
 '''----------------------------------------------------------------------------
 to reload module:
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------
-IDL EQUIV:      plot_fourier.pro
 DESCRIPTION:    (Visualization) Plots the FFT of a given dataset.
 INPUTS:         data    = The FFT spectra of the data to be plotted
                 freqarr = The frequency array of the corresponidng FFT

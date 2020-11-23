@@ -1,14 +1,15 @@
 '''
 NAME:           read_lapd_data.py
 AUTHOR:         swjtang
-DATE:           15 Sep 2020
-DESCRIPTION:    functionally similar to read_lapd_data_newsis_ver4.pro (IDL)
+DATE:           22 Nov 2020
+DESCRIPTION:    Reads .hdf5 file created from LAPD data acquisition system
 INPUTS:         
 '''
-import h5py, re
+import h5py, importlib, re
 import numpy             as np
 import lib.toolbox       as tbx
 import lib.read_lapd_lib as lapdlib  # import functions from library
+importlib.reload(lapdlib)
 
 def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
     xrange=None, yrange=None, zrange=None, nstep=1, sisid=None, tchannum=0, motionid=0, quiet=0):
@@ -210,8 +211,8 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
                     iindex = get_shot_index(0, ishot=iishot, ix=iix, iy=iiy)
 
                     for jj in range(len(rchan)):
-                        tbx.show_progress_bar([iix-xrange[0]+1, iiy-yrange[0]+1, iiz-zrange[0]+1, \
-                            iishot-rshot[0]+1, jj+1], [nx, ny, nz, nshots, len(rchan)], \
+                        tbx.show_progress_bar([iix-xrange[0], iiy-yrange[0], iiz-zrange[0], \
+                            iishot-rshot[0], jj], [nx, ny, nz, nshots, len(rchan)], \
                             ['xx', 'yy', 'zz', 'shots', 'chan'])
 
                         iiboard, iichan  = boardlist[rchan[jj]], chanlist[rchan[jj]]
@@ -237,16 +238,17 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None,\
     tbx.qprint(quiet, '!!! '+hlabel+' = '+str(dataset.shape))
 
     temp ={
-        'data'     : dataset,
+        'data'     : np.array(dataset),
 
-        'x'        : x,
-        'y'        : y,
-        'z'        : z,
-        'time'     : time,
+        'x'        : np.array(x),
+        'y'        : np.array(y),
+        'z'        : np.array(z),
+        'time'     : np.array(time),
         'dt'       : dt,
 
         'chanid'   : chanlist,
         'channame' : dtypelist,
-        'desc'     : lapdlib.get_description(fname)
+        'desc'     : lapdlib.get_description(fname),
+        'msi'      : lapdlib.read_msi_info(fname)
     }
     return temp

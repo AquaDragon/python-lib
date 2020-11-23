@@ -84,17 +84,17 @@ def fname_tds(callnumber, full=1, old=0):
             # tim set a motion list on the run but destroyed the probe motion command
         307: [dir3, '07_TDSpotentialA1_perp_move3.hdf5'],
             # channel: 0=LaB6 current, 1=LaB6 voltage, 2= TDS_A2_fix_L, 3-4=TDS_A1_mov_LRperp,
-            #         5-7= Bx,By,Bz fix37
+            #          5-7= Bx,By,Bz fix37
             # 07 plane: 41x41 plane, 15 shots per position
         308: [dir3, '08_TDSpotentialA1_parallel_Bplane31.hdf5'],
             # 08 plane: 41x41 plane, 15 shots per position (both)
             # board 1 : 0=LaB6 current, 1=LaB6 voltage, 2= TDS_A2_fix_L
-            #          3-4=TDS_A1_mov_LRparallel,  5-7= Bx,By,Bz fix21
+            #           3-4=TDS_A1_mov_LRparallel,  5-7= Bx,By,Bz fix21
             # board 2 : 8-10=Bx,By,Bz mov31
         309: [dir3, '09_TDSpotentialA1_parallel_Bplane31_Isatsweep29.hdf5'],
             # 09 plane: 41x41 plane, 15 shots per position (all 3)
             # board 1 (3.125MHz): 0=LaB6 current (3dB), 1=LaB6 voltage, 2= TDS_A2_fix_L, 
-            #                    3-4=TDS_A1_mov_LRparallel,  5-7= Bx,By,Bz fix21
+            #                     3-4=TDS_A1_mov_LRparallel,  5-7= Bx,By,Bz fix21
             # board 2 (3.125MHz): 8-10=Bx,By,Bz mov31, 11=V_sweep(L), 12=I_sweep(L), 13=Isat(R)
     #### DATARUN (May_18): 14 - 21 MAY 2018 ---------------------------------------------
         401: [dir4, '01_Bdot45_Dipole30_plane.hdf5'],   # bfield plane & dipole plane

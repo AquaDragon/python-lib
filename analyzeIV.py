@@ -1,7 +1,7 @@
 '''
 NAME:               analyzeIV.py
 AUTHOR:             swjtang  
-DATE:               31 Aug 2020
+DATE:               03 Sep 2020
 DESCRIPTION:        A routine to calculate temperature, plasma potential and
                     density from an IV curve.
 REQUIRED INPUTS:    voltage = [V] voltage sweep of IV curve
@@ -22,13 +22,13 @@ import scipy.constants as const
 from matplotlib import pyplot as plt
 from scipy.optimize import curve_fit
 '''----------------------------------------------------------------------------
-to reload module :    
+to reload module:    
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------
 ''' 
 def analyzeIV(voltage, current, res=1, area=1, gain_curr=1, gain_volt=1, lim=[0.25,0.75,0.8], \
-    noplot=0, quiet=0):
+    noplot=0, quiet=0, nwindow=351):
     ### constants -------------------------------------------------------------
     amu = const.physical_constants['atomic mass constant'][0]
     ### program parameters ----------------------------------------------------
@@ -38,8 +38,8 @@ def analyzeIV(voltage, current, res=1, area=1, gain_curr=1, gain_volt=1, lim=[0.
 
     ### get values of voltage and current
     isat0 = np.mean(current[:sm])
-    volt = gain_volt*tbx.smooth(voltage, nwindow=351, polyn=2)
-    curr = gain_curr/res*tbx.smooth(current-isat0, nwindow=351, polyn=2)
+    volt = gain_volt*tbx.smooth(voltage, nwindow=nwindow, polyn=2)
+    curr = gain_curr/res*tbx.smooth(current-isat0, nwindow=nwindow, polyn=2)
     isat = gain_curr/res*isat0
 
     ### checks if current was flipped (set electron current positive)

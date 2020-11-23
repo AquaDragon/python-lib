@@ -1,7 +1,7 @@
 '''
 NAME:           read_lapd_lib.py
 AUTHOR:         swjtang
-DATE:           15 Sep 2020
+DATE:           22 Sep 2020
 DESCRIPTION:    A library of helper functions used to read the hdf5 file from LAPD
 INPUTS:         
 '''
@@ -447,6 +447,57 @@ def read_sisboard_shot(fname, sisid, config_name, iboard=1, ichan=1, index=0):
     elif sisid == 3305: return [-ii*(2 / (2**10 - 1)) for ii in temp]
     else              : return None
 
+#### ------------------------------------------------------------------------------------
+#### Read MSI information ---------------------------------------------------------------
+def read_msi_info(fname):
+    config_list       = '/MSI/'
+    msi_subgroup_list = get_subgroup_names(fname, config_list)
+        # ['Discharge', 'Gas pressure', 'Heater', 'Interferometer array', 'Magnetic field']
+
+    ## define a function that unpacks the MSI information into a dict
+    def unload_dataset_info(fname, name):
+        dataset_list = get_dataset_names(fname, name)
+
+        info_arr = {}
+        ff = h5py.File(fname, 'r')
+        for ii in list(ff[name].attrs):
+            info_arr[ii] = ff[name].attrs[ii]              ## unload root
+
+        for jj in dataset_list:
+            info_arr[jj] = np.array(ff[name + jj +'/'])    ## unload sub-directories
+
+        return info_arr
+
+    ### return discharge MSI information ------------------------------------------------
+    discharge_info = unload_dataset_info(fname, '/MSI/Discharge/')
+    
+    ### create time array for easy analysis
+    dt = discharge_info['Timestep']
+    nt = len(discharge_info['Discharge current'][0,:])
+    discharge_info['time'] = np.arange(nt)*dt + discharge_info['Start time']
+
+    ### return interferometer MSI information -------------------------------------------
+    intf_name          = '/MSI/Interferometer array/'
+    intf_subgroup_list = get_subgroup_names(fname, intf_name)
+
+    ii = intf_subgroup_list[0]
+    intf0_name = intf_name + ii +'/'
+    intf_dataset_list  = get_dataset_names(fname, intf0_name)
+        # ['Interferometer summary list', 'Interferometer trace']
+    #print(intf_subgroup_list, intf_dataset_list)
+
+    ### return bfield MSI information ---------------------------------------------------
+    bfield_info = unload_dataset_info(fname, '/MSI/Magnetic field/')
+    print(bfield_info)
+    print(bfield_info['Magnetic field profile'])
+
+    ### incomplete ----------------------
+    temp = {
+        'discharge': discharge_info,
+        'bfield'   : bfield_info
+    }
+    return temp
+
 
 #### ------------------------------------------------------------------------------------
 #### Helper functions used frequently for siscrate and hdf5 manipulation ----------------
@@ -488,88 +539,27 @@ def get_description(fname):
     return aa.attrs['Description'].decode("utf-8")
 
 
-#### CODE DUMP ------------------------------------------------------------
-#### LAPD 6K Configuration (extract motion list data) -----------------------------------
-#### INPUTS: motionid = by default select the first motion list (starts from 0)
-    # ff = h5py.File(fname, 'r')
-    
-    # motion_group_name = '/Raw data + config/6K Compumotor/'
-    # motion_subgroup_names = get_subgroup_names(fname, motion_group_name)
-    # motion_dataset_names  = get_dataset_names(fname, motion_group_name)
 
-    # motion_data = ff[motion_group_name+motion_dataset_names[motionid]] ## k:motionid
-    # motion_keys = list(motion_data.dtype.fields.keys()) #for troubleshooting
 
-    # motion_list_shot  = motion_data['Shot number']
-    # motion_list_x     = motion_data['x']
-    # motion_list_y     = motion_data['y']
-    # motion_list_z     = motion_data['z']
-    # motion_list_theta = motion_data['theta']
-    # motion_list_phi   = motion_data['phi']
-    # motion_list_probe = motion_data['Probe name']
-    # motion_list_list  = motion_data['Motion list']
+#### CODE DUMP
+    # discharge_name         = '/MSI/Discharge/'
+    # discharge_dataset_list = get_dataset_names(fname, discharge_name)
+    #     # ['Cathode-anode voltage', 'Discharge current', 'Discharge summary']
 
-    # n_motion_lists = len(list(set(motion_list_list))) # set checks for unique elements
-    # n_probes       = len(list(set(motion_list_probe)))
-    # ## skipped error checking with multiple probes or multiple motion lists
+    # discharge_info = {}
+    # for ii in list(ff[discharge_name].attrs):
+    #     discharge_info[ii] = ff[discharge_name].attrs[ii]
 
-    # ## Get motion list parameters ---------------------------------------------
-    # ll = list(ff[motion_group_name].keys())
-    # motion_param_name = motion_group_name + ll[0]
+    # for jj in discharge_dataset_list:
+    #     discharge_info[jj] = np.array(ff[discharge_name + jj +'/'])
+#---
+    # bfield_name          = '/MSI/Magnetic field/'
+    # bfield_dataset_list = get_dataset_names(fname, bfield_name)
+        # ['Magnet power supply currents', 'Magnetic field profile', 'Magnetic field summary']
 
-    # nx = int(ff[motion_param_name].attrs['Nx'])
-    # ny = int(ff[motion_param_name].attrs['Ny'])
-    # dx = ff[motion_param_name].attrs['Delta x']
-    # dy = ff[motion_param_name].attrs['Delta y']
-    # x0 = ff[motion_param_name].attrs['Grid center x']
-    # y0 = ff[motion_param_name].attrs['Grid center y']
+    # bfield_info = {}
+    # for ii in list(ff[bfield_name].attrs):
+    #     bfield_info[ii] = ff[bfield_name].attrs[ii]
 
-    # nxny = nx*ny
-    # nshots = len(motion_list_shot) // nxny
-
-    # geom = 'unknown'
-    # if (nx>1  and ny>1  ): geom = 'xy-plane'
-    # if (nx>1  and ny==1 ): geom = 'x-line'
-    # if (nx==1 and ny>1  ): geom = 'y-line'
-    # if (nx==1 and ny==1 ): geom = 'point'
-
-    # if len(motion_list_shot) % nxny != 0:    # error checking for incomplete datasets
-    #   tbx.qprint(quiet, '!!! This is a dataset from an incomplete datarun.')
-    #   geom = 'incomplete'
-    
-    # ## Format motion lists (ignore theta, phi) --------------------------------
-    # if (geom=='xy-plane'):
-    #   temp = np.reshape(motion_list_x, (nshots,nx,ny), order='F')
-    #   x = temp[0,:,1]
-    #   temp = np.reshape(motion_list_y, (nshots,nx,ny), order='F')
-    #   y = temp[0,1,:]
-    
-    # ## x line, y-line unverified
-    # if (geom=='x-line'):
-    #   temp = np.reshape(motion_list_x, (nshots,nx), order='F')
-    #   x = temp[0,:]
-    #   y = [motion_list_y[0]]
-    
-    # if (geom=='y-line'):
-    #   x = [motion_list_x[0]]
-    #   temp = np.reshape(motion_list_y, (nshots,ny), order='F')
-    #   y = temp[0,:]
-    
-    # if (geom=='point'):
-    #   x = [motion_list_x[0]]
-    #   y = [motion_list_y[0]]
-
-    # if (geom=='incomplete'):
-    #   nx, ny = 1, 1
-    #   nshots = len(motion_list_shot)
-    #   x = [motion_list_x[0]]
-    #   y = [motion_list_y[0]]
-
-    # # nz=1 and z=[0] are to make read_lapd_data.py work
-    # output = {'nx': nx, 'ny': ny, 'nz': 1, 'nshots': nshots, \
-    #         'x': x, 'y': y, 'z': [0], 'geom': geom}
-    # return output
-
-#### ------------------------------------------------------------------------------------
-#### LAPD NI_XYZ Configuration (extract motion list data) -------------------------------
-#### INPUTS: motionid = by default select the first motion list (starts from 0)
+    # for jj in bfield_dataset_list:
+    #     bfield_info[jj] = np.array(ff[bfield_name + jj +'/'])

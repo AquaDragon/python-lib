@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang  
-DATE:           18 Nov 2020
+DATE:           01 Dec 2020
 DESCRIPTION:    A toolbox of commonly used functions.
 '''
 import numpy as np
@@ -61,25 +61,38 @@ def plot_fft(data, freqarr, frange=None, units='kHz', title='<insert title>',  \
     return temp
 
 ''' ---------------------------------------------------------------------------
-IDL EQUIV:    porg.pro
-DESCRIPTION:    (Visualization) Progress bar for jupyter.
-INPUTS:         current_arr = A list of indices of the current progess.
-                total_arr   = A list of indices indicating the end of progress,
-                label       = A list of strings used to label the indices.
-                header      = A string placed at the start of the progress bar.
+DESCRIPTION:    (Visualization) Prints a output/progress bar for jupyter.
+INPUTS:         cur_arr = A list of Indices of the current progess
+                tot_arr = A list of indices indicating the end of progress,
+                label   = A list of strings used to label the indices.
+                header  = A string placed at the start of the progress bar.
 '''
-def show_progress_bar(current_arr, total_arr, label=[''], header=''):
-    if len(current_arr) != len(total_arr): print('!!! show_progress_bar error')
+### wrapper function/alias
+def show_progress_bar(cur_arr, tot_arr, label=None, header=''):
+    progress_bar(cur_arr, tot_arr, label=label, header=header)
+
+def progress_bar(cur_arr, tot_arr, label=None, header=''):
+    def convert_type(var):
+        if isinstance(var, (int,str)): 
+            return np.array([var])
+        else: 
+            return np.array(var)
+    cur_arr, tot_arr = convert_type(cur_arr), convert_type(tot_arr)
+
+    if cur_arr.shape != tot_arr.shape: 
+        print('!!! progress_bar: lists of unequal length')
     else:
-        prlabel   = '(' + '/'.join(label) + ')'
-        prcurrent = '(' + '/'.join([str(ii+1) for ii in current_arr]) + ')' #indices start from 0
-        prtotal   = '(' + '/'.join([str(ii) for ii in total_arr])   + ')'
+        if label == None:
+            prlabel = ''
+        else:
+            label = convert_type(label)
+            prlabel = '(' + '/'.join([str(ii) for ii in label]) + ') = '
+        prcurrent = '(' + '/'.join([str(ii+1) for ii in cur_arr]) + ')' #indices start from 0
+        prtotal   = '(' + '/'.join([str(ii) for ii in tot_arr])   + ')'
 
-        print('\r{0}{1} = {2} of {3} ...'.format(header,prlabel,prcurrent,prtotal), end='')
-
+        print('\r{0} {1}{2} of {3}'.format(header,prlabel,prcurrent,prtotal), end='')
         if prcurrent == prtotal: print('')
-            # format(i)+'/'+format(nframes)+' ('+ \
-            # "{:.2f}".format(i/nframes*100)+'%)...', end='')
+
 
 ''' ---------------------------------------------------------------------------
 IDL EQUIV:      prefig.pro

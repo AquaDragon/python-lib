@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang  
-DATE:           01 Dec 2020
+DATE:           23 Dec 2020
 DESCRIPTION:    A toolbox of commonly used functions.
 '''
 import numpy as np
@@ -12,7 +12,9 @@ to reload module:
 import importlib
 importlib.reload(<module>)
 -------------------------------------------------------------------------------
-DESCRIPTION:    (Visualization) Plots the FFT of a given dataset.
+                VISUALIZATION
+-------------------------------------------------------------------------------
+DESCRIPTION:    Plots the FFT of a given dataset.
 INPUTS:         data    = The FFT spectra of the data to be plotted
                 freqarr = The frequency array of the corresponidng FFT
                 frange  = (optional) Range of data to show
@@ -61,9 +63,9 @@ def plot_fft(data, freqarr, frange=None, units='kHz', title='<insert title>',  \
     return temp
 
 ''' ---------------------------------------------------------------------------
-DESCRIPTION:    (Visualization) Prints a output/progress bar for jupyter.
-INPUTS:         cur_arr = A list of Indices of the current progess
-                tot_arr = A list of indices indicating the end of progress,
+DESCRIPTION:    Prints a output/progress bar for jupyter.
+INPUTS:         cur_arr = A list of indices of the current progess.
+                tot_arr = A list of indices indicating the end of progress.
                 label   = A list of strings used to label the indices.
                 header  = A string placed at the start of the progress bar.
 '''
@@ -95,8 +97,7 @@ def progress_bar(cur_arr, tot_arr, label=None, header=''):
 
 
 ''' ---------------------------------------------------------------------------
-IDL EQUIV:      prefig.pro
-DESCRIPTION:    (Visualization) Preamble to create a figure with appropriate labels.
+DESCRIPTION:    Preamble to create a figure with appropriate labels.
 INPUTS:         figsize             = plot dimensions in [width,height]
                 labelsize, ticksize = font sizes of labels indicated in name
                 xlabel, ylabel      = text label values
@@ -110,30 +111,53 @@ def prefig(figsize=[16,4.5], labelsize=40, ticksize=25, xlabel='x', ylabel='y'):
     return fig
 
 ''' ---------------------------------------------------------------------------
+DESCRIPTION:    Extract line profile at (axis=value) from 2D plot.
+INPUTS:         x, y = 1D arrays of x/y-axis values
+                data = 2D array with dimensions equal to len(x),len(y)
+                axis  = choose 'x' or 'y'
+                value = the value to cut the data at
+'''
+def get_line_profile(x, y, data, axis='x', value=0):
+    if axis=='y': 
+        y_arg = value_locate_arg(y, value)
+        print('Extracting x-axis at y = {0:.2f}...'.format(y[y_arg]))
+        return data[:,y_arg]
+    elif axis=='x':
+        x_arg = value_locate_arg(x, value)
+        print('Extracting y-axis at x = {0:.2f}...'.format(x[x_arg]))
+        return data[x_arg,:]
+    else:
+        print('Axis not specified, input x or y')
+
+
+'''
+-------------------------------------------------------------------------------
+                FILTERING
+-------------------------------------------------------------------------------
+DESCRIPTION:    A function used to integrate B-dot. Assumes first dimension is 
+                time.
 IDL EQUIV:      filter_bint.pro
-DESCRIPTION:    (Filter) A function used to integrate B-dot. Assumes first 
-                dimension is time.
-INPUTS:         data       = n-dimensional array containing data to be integrated
-                dt         = (optional) time between two adjacent data points
-                meanrange  = (optional) 2-element array indicating start and 
+INPUTS:         data    = n-dimensional array containing data to be integrated
+                dt      = (optional) time between two adjacent data points
+                mrange  = (optional) 2-element array indicating start and 
                              stop indices of array to take the mean. 
 '''
-def filter_bint(data, dt=None, meanrange=None):
+def filter_bint(data, dt=None, mrange=None):
     print('Integrating B-dot data...', end=' ')
     mean_val = np.mean(data, axis=0)
-    if meanrange != None:
-        if len(meanrange) == 2 : 
-            mean_val = np.mean(data[int(meanrange[0]):int(meanrange[1]),...], axis=0)
+    if mrange != None:
+        if len(mrange) == 2 : 
+            mean_val = np.mean(data[int(mrange[0]):int(mrange[1]),...], axis=0)
     if dt == None: dt=1
 
     print('Done!')
-    # mean_val is broadcast into the dimensions of data, requiring the first dimension
-    # to be time or the trailing axes won't align.
+    # mean_val is broadcast into the dimensions of data, requiring the first 
+    # dimension to be time or the trailing axes won't align.
     return np.cumsum(data-mean_val, axis=0)*dt
 
 ''' ---------------------------------------------------------------------------
+DESCRIPTION:    A function to apply filters to a data set (non-FFT).
 IDL EQUIV:      filterfreq.pro
-DESCRIPTION:    (Filter) A function to apply filters to a data set (non-FFT).
 INPUTS: 
 '''
 def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=[0,50]):
@@ -141,7 +165,7 @@ def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=[0,50]):
     freqarr = np.fft.fftfreq(len(time), time[1]-time[0])
     freqarr /= 1e3    # [kHz]
 
-    #### determine filter type ------------------------------------------------------
+    #### determine filter type ------------------------------------------------
     if ftype == 0:
         output = fftarr
         tempfilter = [1 for ii in range(len(fftarr))]
@@ -162,7 +186,7 @@ def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=[0,50]):
     tempfilter    = np.array(tempfilter)
     data_filtered = np.fft.ifft(np.array(fftarr)*tempfilter, norm='ortho')
 
-    #### plot graphs for debug ------------------------------------------------------
+    #### plot graphs for debug ------------------------------------------------
     if debug != 0:
         def norm_data(data):
             temp = abs(data)
@@ -208,37 +232,46 @@ def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=[0,50]):
     return np.real(data_filtered)
 
 ''' ---------------------------------------------------------------------------
-DESCRIPTION:    (Filter) looks for outliers in the data and removes them
+DESCRIPTION:    Looks for outliers in the data and removes them
 INPUTS:         data = array of dimensions (nt,nx,ny,nshot,nchan)
-                drange = 2 element array, remove data that does not fall within range
+                drange = 2 element array, remove data that does not fall within 
+                         range
 '''
 def remove_outliers(data, drange=[0,1]):
-    temp  = copy.copy(data)    # copy array so that original does not get overwritten
+    # copy array so that original does not get overwritten
+    temp  = copy.copy(data)    
     index = np.where((temp < drange[0])|(temp > drange[1]))
     temp[index] = None
     return temp
 
 ''' ---------------------------------------------------------------------------
-DESCRIPTION:    (Filter) Wrapper for smoothing function using Savitzky-Golay filter
+DESCRIPTION:    Wrapper for smoothing function using Savitzky-Golay filter
                 See scipy.signal.savgol_filter() documentation for info
 INPUTS:         data    = data to be smoothed
-                nwindow = Length of the filter window. Must be a positive odd integer
+                nwindow = Length of the filter window. Must be a positive odd 
+                          integer
                 polyn   = Order of the polynomial used to fit the samples. 
                           Must be less than nwindow.
 '''
 def smooth(data, nwindow=351, polyn=2):
     return scipy.signal.savgol_filter(data, nwindow, polyn)
 
-''' ---------------------------------------------------------------------------
+
+
+''' 
+-------------------------------------------------------------------------------
+                MATH & CALCULATIONS
+-------------------------------------------------------------------------------
+DESCRIPTION:    Averages the FFT over all other dimensions in the dataset.
 IDL EQUIV:      avgfft.pro
-DESCRIPTION:    (Math) Averages the FFT over all other dimensions in the dataset.
 INPUTS:         data = array of dimensions (nt,nx,ny,nshot,nchan)
 '''
 def average_fft(data, time, axis=0):
     print('Averaging FFTs...', end=' ')
     ndim = len(data.shape)
     fftarr  = np.fft.fft(data, axis=axis, norm='ortho')
-    fftavg  = np.mean(abs(fftarr), axis=tuple([ii for ii in range(ndim) if (ii != axis)]))
+    fftavg  = np.mean(abs(fftarr), axis=tuple([ii for ii in range(ndim) if \
+        (ii != axis)]))
     freqarr = np.fft.fftfreq(len(time), time[1]-time[0])
 
     sort_ind = np.where(freqarr >= 0)  # returns only positive frequencies
@@ -247,9 +280,9 @@ def average_fft(data, time, axis=0):
     return fftavg[sort_ind], freqarr[sort_ind]
 
 ''' ---------------------------------------------------------------------------
-IDL EQUIV:      c_correlate.pro
-DESCRIPTION:    (Math) Calculates the NORMALIZED cross-correlation Pxy(L) as a 
+DESCRIPTION:    Calculates the NORMALIZED cross-correlation Pxy(L) as a 
                 function of lag L.
+IDL EQUIV:      c_correlate.pro
 '''
 def c_correlate(sig1, sig2):
     c12 = np.correlate(sig1, sig2, 'same')
@@ -259,8 +292,8 @@ def c_correlate(sig1, sig2):
     return [ii/np.sqrt(c11*c22) for ii in c12]
 
 ''' ---------------------------------------------------------------------------
+DESCRIPTION:    Finds the nearest value in an array.
 IDL EQUIV:      value_locate.pro
-DESCRIPTION:    (Math) Finds the nearest value in an array.
 '''
 def value_locate(array, value):
     array = np.asarray(array)
@@ -273,8 +306,8 @@ def value_locate_arg(array, value):
     return idx
 
 ''' ---------------------------------------------------------------------------
+DESCRIPTION:    4th order Runge-Kutta
 IDL EQUIV:      RK4.pro
-DESCRIPTION:    (Math) 4th order Runge-Kutta
 '''
 # Finds value of y for a given x using step size h 
 # and initial value y0 at x0. 
@@ -311,7 +344,8 @@ def check_save_filepath(save, file_type):
 
         if chkdir == '': svdir ='./'            # check if directory specified
         elif os.path.isdir(chkdir) == False:    # check if directory exists
-            print('!!! [save=] Specified directory does not exist. Saving to current directory.')
+            print('!!! [save=] Specified directory does not exist. Saving to \
+                current directory.')
             svdir ='./'  
         else:
             svdir = ''
@@ -332,19 +366,24 @@ def check_save_filepath(save, file_type):
             
         return svdir + svfile
 
-''' ---------------------------------------------------------------------------
-DESCRIPTION:    (Auxillary) Returns position of port wrt fixed port p0
+''' 
+-------------------------------------------------------------------------------
+                AUXILLARY FUNCTIONS
+-------------------------------------------------------------------------------
+DESCRIPTION:    Returns position of port w.r.t fixed port p0.
 INPUTS:         port  = The port position in cm
-                p0    = If this is set, the port position will be with respect to this port.
+                p0    = If this is set, the port position will be with respect 
+                        to this port.
 '''     
 def port_to_z(port, p0=None):
     if p0 == None: return -31.95*(port)+1693.35
     else: return -31.95*(port-p0)
 
 ''' ---------------------------------------------------------------------------
-DESCRIPTION:    (Auxillary) A switch function used to suppress print outputs
+DESCRIPTION:    A switch function used to suppress print outputs.
 INPUTS:         quiet  = If set to anything other than zero it will not print
-                text   = The string to be printed. Unlike print(), it only accepts one input.
+                text   = The string to be printed. Unlike print(), it only 
+                         accepts one input.
 '''
 def qprint(quiet, text):
     if quiet == 0: print(text)

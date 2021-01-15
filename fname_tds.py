@@ -1,7 +1,7 @@
 '''
 NAME:           fname_tds.pro
 AUTHOR:         swjtang
-DATE:           31 Aug 2020
+DATE:           03 Jan 2021
 DESCRIPTION:    Returns filenames of TDS .hdf5 files with a single call number
 INPUTS:         callnumber = the id of the file to be read
                 full       = (optional) returns the filename only if set to 0
@@ -235,6 +235,7 @@ def fname_tds(callnumber, full=1, old=0):
             # board 3 (3.125MHz):   9: Port28 Diode, 10-11: Vx+/Vx- EB34
             # board 4 (3.125MHz):   12: LaB6 current, 13: LaB6 voltage
     #### DATARUN (18_Nov): 13 NOV 2018 - ?? ---------------------------------------------
+    #### see excel file for details (500-550)
         501: [dir6, '01_Bmov_40_37_Vfloat_34.hdf5'],
         502: [dir6, '02_Bmov_40_37_Vfloat_34.hdf5'],
         503: [dir6, '03_Bmov_45_37_Vfloat_34_short.hdf5'],
@@ -256,6 +257,7 @@ def fname_tds(callnumber, full=1, old=0):
         533: [dir6, '33_Bmov_33_27_EB31_610A_2018-11-22_13.07.49.hdf5'],
 
     #### DATARUN (19_Apr): 08 - 14 APR 2019 ---------------------------------------------
+    #### see excel file for details (500-550)
         551: [dir7, '01_Bmov_43_31.hdf5'],
         552: [dir7, '02_Bmov_43_31_line.hdf5'],
         553: [dir7, '03_Bmov_43_31_line_2.hdf5'],
@@ -263,7 +265,7 @@ def fname_tds(callnumber, full=1, old=0):
         555: [dir7, '05_Bmov_43(2).hdf5'],
         556: [dir7, '06_TDSdipole38_37_XYZ.hdf5'],    ## incomplete data run
         557: [dir7, '07_TDSdipole38_37_XYZ_1kG.hdf5'],
-        558: [dir7, '08_Bmov_43_31.hdf5'],
+        558: [dir7, '08_Bmov_43_31.hdf5'],   ## Bdot corrupted by high freq noise 10x amplifier
         559: [dir7, '09_TDSdipole38_37_XYZ_500G.hdf5'],
         560: [dir7, '10_Bmov_43_line.hdf5'],
         561: [dir7, '11_Bmov_43_31_500G.hdf5'],
@@ -271,6 +273,7 @@ def fname_tds(callnumber, full=1, old=0):
         563: [dir7, '13_Bmov_43_31_500G_lite_restart.hdf5'],
 
     #### DATARUN (19_July): 08 - 20 JUL 2019 --------------------------------------------
+    #### see excel file for details (600)
         601: [dir8, '01_Bmov33_39_Bfix32_41.hdf5'],
         602: [dir8, '02_Bmov31_37_Bfix32_42.hdf5'],
         603: [dir8, '03_Bmov29_31_Bfix32_42.hdf5'],

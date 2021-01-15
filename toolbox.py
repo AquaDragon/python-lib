@@ -1,12 +1,13 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang  
-DATE:           23 Dec 2020
+DATE:           08 Jan 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 '''
 import numpy as np
 import os, copy, scipy.signal
 from matplotlib import pyplot as plt
+from scipy.io.idl import readsav    ## for read_IDL_sav
 '''----------------------------------------------------------------------------
 to reload module:
 import importlib
@@ -14,55 +15,6 @@ importlib.reload(<module>)
 -------------------------------------------------------------------------------
                 VISUALIZATION
 -------------------------------------------------------------------------------
-DESCRIPTION:    Plots the FFT of a given dataset.
-INPUTS:         data    = The FFT spectra of the data to be plotted
-                freqarr = The frequency array of the corresponidng FFT
-                frange  = (optional) Range of data to show
-                units   = (optional) The units of the frequency array
-                title   = (optional) The title of the plot to be displayed
-                fname   = (optional) The file name to be displayed as a subtitle
-                save    = (optional) The directory to save the final image
-'''
-def plot_fft(data, freqarr, frange=None, units='kHz', title='<insert title>',  \
-        fname=None, save=None):
-    plt.rcParams['xtick.labelsize']=18
-    plt.rcParams['ytick.labelsize']=18
-
-    fig = plt.figure(figsize=(8,4.5))
-    plt.plot(freqarr, data)
-
-    if fname != None: 
-        plt.suptitle(title, y=1.015, fontsize=24)
-        plt.title(fname, y=1.01, fontsize=10)
-    else:
-        plt.title(title, fontsize=24)
-
-    plt.xlabel('Frequency [' + units + ']', fontsize=20)
-    plt.ylabel('Amplitude', fontsize=20)
-
-    if frange != None:   # sets the plot range
-        x1, x2 = frange[0], frange[1]
-        x1_ind, x2_ind = value_locate_arg(freqarr, x1), value_locate_arg(freqarr, x2)
-        if x1_ind == x2_ind: print('!!! Plot range too small! Check units?')
-        else:
-            y2 = np.amax(data[x1_ind:x2_ind])
-            plt.xlim([x1,x2])
-            plt.ylim([0,1.05*y2])  #scales the plot so that the max peak is visible
-    else:
-        x1_ind, x2_ind = None, None
-
-    if save != None:
-        finalsvpath=check_save_filepath(save, 'image')
-
-        fig.savefig(finalsvpath, bbox_inches='tight')
-        print('File saved to = '+finalsvpath)
-
-    temp ={
-        'x1': x1_ind, 'x2': x2_ind    # provide the indices for the freq range
-    }
-    return temp
-
-''' ---------------------------------------------------------------------------
 DESCRIPTION:    Prints a output/progress bar for jupyter.
 INPUTS:         cur_arr = A list of indices of the current progess.
                 tot_arr = A list of indices indicating the end of progress.
@@ -70,8 +22,8 @@ INPUTS:         cur_arr = A list of indices of the current progess.
                 header  = A string placed at the start of the progress bar.
 '''
 ### wrapper function/alias
-def show_progress_bar(cur_arr, tot_arr, label=None, header=''):
-    progress_bar(cur_arr, tot_arr, label=label, header=header)
+def show_progress_bar(*args, **kwargs):    #### ALIAS
+    progress_bar(*args, **kwargs)
 
 def progress_bar(cur_arr, tot_arr, label=None, header=''):
     def convert_type(var):
@@ -149,11 +101,12 @@ def filter_bint(data, dt=None, mrange=None):
         if len(mrange) == 2 : 
             mean_val = np.mean(data[int(mrange[0]):int(mrange[1]),...], axis=0)
     if dt == None: dt=1
-
+    print('Mean complete, taking cumulative sum...')
+    bint_data = np.cumsum(data-mean_val, axis=0)*dt
     print('Done!')
     # mean_val is broadcast into the dimensions of data, requiring the first 
     # dimension to be time or the trailing axes won't align.
-    return np.cumsum(data-mean_val, axis=0)*dt
+    return bint_data
 
 ''' ---------------------------------------------------------------------------
 DESCRIPTION:    A function to apply filters to a data set (non-FFT).
@@ -253,33 +206,120 @@ INPUTS:         data    = data to be smoothed
                 polyn   = Order of the polynomial used to fit the samples. 
                           Must be less than nwindow.
 '''
-def smooth(data, nwindow=351, polyn=2):
-    return scipy.signal.savgol_filter(data, nwindow, polyn)
+def smooth(data, nwindow=351, polyn=2, **kwargs):
+    return scipy.signal.savgol_filter(data, nwindow, polyn, **kwargs)
 
+
+
+''' 
+-------------------------------------------------------------------------------
+                FFT ROUTINES
+-------------------------------------------------------------------------------
+DESCRIPTION:    FFT then average over dimensions in a multi-dimensional dataset.
+IDL EQUIV:      avgfft.pro
+INPUTS:         data = array of dimensions (nt,nx,ny,nshot,nchan)
+                time = array of time values\
+                axis = the index of the time axis on the data (does not get averaged)
+'''
+def fft(*args, **kwargs):    #### ALIAS
+    return average_fft(*args, **kwargs)
+
+def average_fft(data, time, dt=1, axis=0, average=1):
+    ndim = len(data.shape)
+    if len(time) != 0: 
+        dt = time[1]-time[0]    ## if time array or dt exists, set dt value
+    freqarr = np.fft.fftfreq(data.shape[axis], dt)
+    sort_ind = np.where(freqarr >= 0)  # returns only positive frequencies
+
+    print('Calculating FFTs...', end=' ')
+    fftarr  = np.fft.fft(data, axis=axis, norm='ortho')
+    if average ==1:
+        print('Averaging FFTs...', end=' ')
+        fftavg  = np.mean(abs(fftarr), axis=tuple([ii for ii in range(ndim) if \
+            (ii != axis)]))
+        print('Done!')
+        return fftavg[sort_ind], freqarr[sort_ind]
+    else:
+        print('Done!')
+        return fftarr[sort_ind], freqarr[sort_ind]
+
+''' ---------------------------------------------------------------------------
+DESCRIPTION:    Plots the FFT of a given dataset.
+INPUTS:         data    = The FFT spectra of the data to be plotted
+                freqarr = The frequency array of the corresponidng FFT
+                frange  = (optional) Range of data to show
+                units   = (optional) The units of the frequency array
+                title   = (optional) The title of the plot to be displayed
+                fname   = (optional) The file name to be displayed as a subtitle
+                save    = (optional) The directory to save the final image
+'''
+def plot_fft(data, freqarr, frange=None, units='kHz', title='set title=',  \
+        figsize=(8,4.5), fname=None, save=None, ylim=None):
+    plt.rcParams['xtick.labelsize']=18
+    plt.rcParams['ytick.labelsize']=18
+
+    fig = plt.figure(figsize=figsize)
+    plt.plot(freqarr, data)
+
+    if fname != None: 
+        plt.suptitle(title, y=1.015, fontsize=24)
+        plt.title(fname, y=1.01, fontsize=10)
+    else:
+        plt.title(title, fontsize=24)
+
+    plt.xlabel('Frequency [' + units + ']', fontsize=20)
+    plt.ylabel('Amplitude', fontsize=20)
+
+    if frange != None:   # sets the plot range
+        x1, x2 = frange[0], frange[1]
+        x1_ind, x2_ind = value_locate_arg(freqarr, x1), value_locate_arg(freqarr, x2)
+        if x1_ind == x2_ind: print('!!! Plot range too small! Check units?')
+        else:
+            if ylim != None: 
+                y2 = ylim
+            else:
+                y2 = np.amax(data[x1_ind:x2_ind])
+            plt.xlim([x1,x2])
+            plt.ylim([0,1.05*y2])  #scales the plot so that the max peak is visible
+    else:
+        x1_ind, x2_ind = None, None
+
+    if save != None:
+        finalsvpath=check_save_filepath(save, 'image')
+        fig.savefig(finalsvpath, bbox_inches='tight')
+        print('File saved to = '+finalsvpath)
+
+    temp ={
+        'x1': x1_ind, 'x2': x2_ind    # provide the indices for the freq range
+    }
+    return temp
+
+''' ---------------------------------------------------------------------------
+DESCRIPTION:    Finds the most prominent peak frequency in the FFT by slicing.
+INPUTS:         fftdata = The FFT spectra of the data
+                freqarr = The frequency array of the corresponidng FFT
+                frange  = Range of data to slice to find the peak
+                plot    = (optional) Set to any value to disable plot
+'''
+
+def fft_peak_find(fftdata, freqarr, frange=[0,1], plot=1):
+    ii = value_locate_arg(freqarr, frange[0])
+    jj = value_locate_arg(freqarr, frange[1])
+
+    if plot == 1 :
+        prefig()
+        plt.plot(freqarr[ii:jj], fftdata[ii:jj])
+
+    argmax = np.argmax(fftdata[ii:jj])
+    peak_f = freqarr[ii+argmax]
+    print(peak_f)
+    return peak_f
 
 
 ''' 
 -------------------------------------------------------------------------------
                 MATH & CALCULATIONS
 -------------------------------------------------------------------------------
-DESCRIPTION:    Averages the FFT over all other dimensions in the dataset.
-IDL EQUIV:      avgfft.pro
-INPUTS:         data = array of dimensions (nt,nx,ny,nshot,nchan)
-'''
-def average_fft(data, time, axis=0):
-    print('Averaging FFTs...', end=' ')
-    ndim = len(data.shape)
-    fftarr  = np.fft.fft(data, axis=axis, norm='ortho')
-    fftavg  = np.mean(abs(fftarr), axis=tuple([ii for ii in range(ndim) if \
-        (ii != axis)]))
-    freqarr = np.fft.fftfreq(len(time), time[1]-time[0])
-
-    sort_ind = np.where(freqarr >= 0)  # returns only positive frequencies
-
-    print('Done!')
-    return fftavg[sort_ind], freqarr[sort_ind]
-
-''' ---------------------------------------------------------------------------
 DESCRIPTION:    Calculates the NORMALIZED cross-correlation Pxy(L) as a 
                 function of lag L.
 IDL EQUIV:      c_correlate.pro
@@ -370,6 +410,17 @@ def check_save_filepath(save, file_type):
 -------------------------------------------------------------------------------
                 AUXILLARY FUNCTIONS
 -------------------------------------------------------------------------------
+DESCRIPTION:    Reads IDL .sav files.
+INPUTS:         fdir  = The file directory
+                fname = The name of the file
+'''
+def read_IDL_sav(fdir, fname):
+    ff = readsav(fdir+fname)
+    print('Reading... {0}'.format(fdir+fname))
+    print(' -> Keys: {0}'.format(list(ff.keys())))
+    return ff
+
+''' ---------------------------------------------------------------------------
 DESCRIPTION:    Returns position of port w.r.t fixed port p0.
 INPUTS:         port  = The port position in cm
                 p0    = If this is set, the port position will be with respect 
@@ -380,10 +431,15 @@ def port_to_z(port, p0=None):
     else: return -31.95*(port-p0)
 
 ''' ---------------------------------------------------------------------------
-DESCRIPTION:    A switch function used to suppress print outputs.
+DESCRIPTION:    A print function with a switch to suppress print outputs.
 INPUTS:         quiet  = If set to anything other than zero it will not print
-                text   = The string to be printed. Unlike print(), it only 
-                         accepts one input.
 '''
-def qprint(quiet, text):
-    if quiet == 0: print(text)
+def qprint(quiet, *args, **kwargs):
+    if quiet == 0: print(*args, **kwargs)
+
+''' ---------------------------------------------------------------------------
+DESCRIPTION:    matplotlib's savefig, but define bbox_inches='tight' so that 
+                the axes does not get cropped.
+'''
+def savefig(*args, **kwargs):
+    return plt.savefig(*args, **kwargs, bbox_inches='tight')

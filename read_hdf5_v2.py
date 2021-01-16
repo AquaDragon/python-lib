@@ -1,21 +1,23 @@
 '''
-The normal structure of an hdf5 file created by 180E lab data acquisition system is
-HDF5 File -->
+The normal structure of an hdf5 file created by 180E lab data acquisition
+system is HDF5 File -->
 |-> Group 'Acquisition' --> Group 'LeCroy_scope' -->
-|      Datasets 'Channel1', 'Channel2', 'Channel3', 'Channel4', 'Headers', 'LeCroy_scope_Setup_Arrray', 'time'
+|      Datasets 'Channel1', 'Channel2', 'Channel3', 'Channel4', 'Headers',
+        'LeCroy_scope_Setup_Arrray', 'time'
 |-> Group 'Controls' --> Group 'Positions' --> Group 'positions_setup_array'
 |-> Group 'Meta' --> Group 'Python' --> Group 'Files' --> Group 'Files' -->
       Datasets 'Data_Run_GUI.py', 'LeCroy_Scope.py', 'Motor_Control_2D.py'
 
 FUNCTION:       readhdf5
 AUTHOR:         swjtang (modified) / Yuchen Qian (original)
-DATE:           05 Feb 2019
+DATE:           15 Jan 2021
 DESCRIPTION:    Reads hdf5 file data created in the 180E lab into NumPy arrays.
 INPUTS:         path = The path of the hdf5 file
 RETURNS:
         -ch1, ch2, ch3, ch4-
          Numpy arrays
-         Data of each channel, usually in the dimension of (time, positions, # of shots)
+         Data of each channel, usually in the dimension of (time, positions,
+          # of shots)
         -pos-
          Numpy array
          Array of positions set up
@@ -28,6 +30,7 @@ RETURNS:
 '''
 import h5py
 import numpy as np
+
 
 def readhdf5(path):
 
@@ -56,7 +59,6 @@ def readhdf5(path):
         print('Error: Control group does not exist. No data positions.')
         pos = []
 
-
     # Get Lecroy_scope group under Acquisition
     if 'LeCroy_scope' in list(acq.keys()):
         scope = acq['LeCroy_scope']
@@ -65,8 +67,10 @@ def readhdf5(path):
         return
 
     # Get dataset from Lecroy_scope group and translate into arrays
-    # The output data of each channel is a numpy array with dimensions pos * time_step
-    # The exact data at a specific position at a specific time is chx[pos][time_step]
+    # The output data of each channel is a numpy array with dimensions
+    #  pos * time_step
+    # The exact data at a specific position at a specific time is
+    #  chx[pos][time_step]
     if 'time' in list(scope.keys()):
         time = np.array(scope['time'])
         nt = (len(time))
@@ -127,35 +131,34 @@ def readhdf5(path):
         ch4attr = ''
         print('Channel 4 is empty.')
 
-        
     # Descriptions attached to the dataset
-    attributes = 'Ch1: ' + ch1attr + '\nCh2: ' + ch2attr + '\nCh3: ' + ch3attr + '\nCh4: ' + ch4attr
+    attributes = 'Ch1: ' + ch1attr + '\nCh2: ' + ch2attr + '\nCh3: '
+    + ch3attr + '\nCh4: ' + ch4attr
 
-
-    # Reorganize positions to generate x,y arrays (need a check for incomplete datasets)
+    # Reorganize positions to generate x,y arrays (need a check for
+    #  incomplete datasets)
     if len(pos) != 0:
         temp = [x[1] for x in pos]
-        ny   = temp.count(temp[1])
-        nx   = int(len(temp)/ny)
+        ny = temp.count(temp[1])
+        nx = int(len(temp)/ny)
 
-        xx   = temp[0:nx]  #list of x positions
+        xx = temp[0:nx]  # list of x positions
 
         temp = [x[2] for x in pos]
-        yy   = temp[::nx]  #list of y positions
+        yy = temp[::nx]  # list of y positions
     else:
-        nx  = 0
-        ny  = 0
-        xx  = []
-        yy  = []
-    
-    
+        nx = 0
+        ny = 0
+        xx = []
+        yy = []
+
     # Returns the data in a data structure
-    data_struct={'ch1': ch1, 'ch2': ch2, 'ch3': ch3, 'ch4': ch4, \
-                'pos': pos, 'time': time, 'attributes': attributes, \
-                'nx': nx, 'ny': ny, 'xx': xx, 'yy': yy}
+    data_struct = {'ch1': ch1, 'ch2': ch2, 'ch3': ch3, 'ch4': ch4,
+                   'pos': pos, 'time': time, 'attributes': attributes,
+                   'nx': nx, 'ny': ny, 'xx': xx, 'yy': yy}
     return(data_struct)
 
-#-------------- for testing ---------------------#
+# -------------- for testing ---------------------#
 if __name__ == '__main__':
     path = '/Users/TheOne/Desktop/180/1-18 1-40, wide range.hdf5'
     ch1, ch2, ch3, ch4, pos, time, attr = readhdf5(path)

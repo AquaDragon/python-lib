@@ -1,22 +1,37 @@
 '''
 NAME:           read_lapd_data.py
 AUTHOR:         swjtang
-DATE:           15 Jan 2021
-DESCRIPTION:    Reads .hdf5 file created from LAPD data acquisition system
+DATE:           28 Feb 2021
+DESCRIPTION:    Reads .hdf5 file created from LAPD data acquisition system.
 '''
 import h5py
 import importlib
 import re
 import numpy as np
+from itertools import product
 
 import lib.toolbox as tbx
 import lib.read_lapd_lib as lapdlib  # import functions from library
 importlib.reload(lapdlib)
 
 
-def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
-                   yrange=None, zrange=None, nstep=1, sisid=None, tchannum=0,
-                   motionid=0, quiet=0):
+def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, rstep=None,
+                   xrange=None, yrange=None, zrange=None, nshots=1, nsteps=1,
+                   sisid=None, tchannum=0, motionid=0, quiet=0):
+    ''' ----------------------------------------------------------------------
+    INPUTS:   fname = The full directory of the file + file name
+    OPTIONAL: daqconfig = (0 to 4) Override to manually determine shot indexing
+              rchan     = 1D array of channels to be read (default is only 0)
+              rshot, rstep, xrange, yrange, zrange = 1 or 2-element array 
+                          which determines the start and stop range of shots
+                          to be read
+              sisid     = Manual override to determine SIS board to be read
+              tchannum  = Determines the sampling rate of the data. By default,
+                          it uses the first channel's sampling rate.
+              motionid  = Determines the motion array of the data. By default,
+                          it uses the first probe's motion list.
+              quiet     = Suppress all print outputs.
+    '''
 
     # check devices being used in the data acquisition ------------------------
     device_check = lapdlib.check_devices(fname)
@@ -36,9 +51,10 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
         tbx.qprint(quiet, 'Reading motion list from module:  NI_XYZ')
         daqconfig = 4
     else:
-        motion_data = {'nx': 1, 'ny': 1, 'nz': 1, 'nshots': 1,
+        motion_data = {'nx': 1, 'ny': 1, 'nz': 1, 'nshots': nshots,
                        'x': [0], 'y': [0], 'z': [0], 'geom': 'unknown?'}
         tbx.qprint(quiet, 'No motion list module detected.')
+        daqconfig = 3
 
     nx = motion_data['nx']
     ny = motion_data['ny']
@@ -125,10 +141,14 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
                        'samples!')
         if len(np.unique(dt)) > 1 or len(np.unique(nt)) > 1:
             tbx.qprint(quiet, 'Choosing sampling time of channel with '
-                       'index '+str(tchannum)+'...')
+                       'index {0}...'.format(tchannum))
         time = [ii*dt[tchannum] for ii in range(nt[tchannum])]
     else:
         return None  # if SIS crate not active end the program
+
+    # check if Waveform module active -----------------------------------------
+    if device_check[8]:
+        print('!!! Note: Waveform module is active.')
 
     # Now read the data -------------------------------------------------------
     # The following checks the user input for the range of values to be read
@@ -163,6 +183,7 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
     yrange = check_user_range_input(ny, yrange)
     zrange = check_user_range_input(nz, zrange)
     rshot = check_user_range_input(nshots, rshot)
+    rstep = check_user_range_input(nsteps, rstep)
 
     # each channel to be read has to be individually specified (only for
     #  channels)
@@ -174,25 +195,27 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
 
     tbx.qprint(quiet, '----------------------------------------------------'
                '--------')
-    tbx.qprint(quiet, 'Data geometry = '+geom)
+    tbx.qprint(quiet, 'Data geometry = {0}'.format(geom))
     tbx.qprint(quiet, 'Read Channels = '+'   '.join([str(ii) for ii in rchan]))
-    tbx.qprint(quiet, 'Shot range    = '+str(rshot[0])+' to '+str(rshot[1]))
-    tbx.qprint(quiet, 'X value range = '+str(xrange[0])+' to '+str(xrange[1]))
-
-    if geom == 'xz-plane':
-        tbx.qprint(quiet, 'Z value range = {0} to {1}'.format(
-            zrange[0], zrange[1]))
-    elif geom == 'xyz-volume':
-        tbx.qprint(quiet, 'Y value range = {0} to {1}'.format(
-            yrange[0], yrange[1]))
-        tbx.qprint(quiet, 'Z value range = {0} to {1}'.format(
-            zrange[0], zrange[1]))
-    else:
-        tbx.qprint(quiet, 'Y value range = {0} to {1}'.format(
-            yrange[0], yrange[1]))
+    tbx.qprint(quiet, 'Shot range    = {0} to {1}'.format(rshot[0], rshot[1]))
+    if daqconfig not in [3]:
+        tbx.qprint(quiet, 'X value range = {0} to {1}'.format(
+            xrange[0], xrange[1]))
+        if geom == 'xz-plane':
+            tbx.qprint(quiet, 'Z value range = {0} to {1}'.format(
+                zrange[0], zrange[1]))
+        elif geom == 'xyz-volume':
+            tbx.qprint(quiet, 'Y value range = {0} to {1}'.format(
+                yrange[0], yrange[1]))
+            tbx.qprint(quiet, 'Z value range = {0} to {1}'.format(
+                zrange[0], zrange[1]))
+        else:
+            tbx.qprint(quiet, 'Y value range = {0} to {1}'.format(
+                yrange[0], yrange[1]))
 
     # store original values
-    ntt, nxx, nyy, nzz, nchann, nshotss = nt, nx, ny, nz, nchan, nshots
+    ntt, nxx, nyy, nzz = nt, nx, ny, nz
+    nchann, nshotss, nstepss = nchan, nshots, nsteps
 
     x = x[xrange[0]:xrange[1]+1]
     y = y[yrange[0]:yrange[1]+1]
@@ -200,6 +223,7 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
 
     nt, nx, ny, nz, nchan = len(time), len(x), len(y), len(z), len(rchan)
     nshots = rshot[1]-rshot[0]+1
+    nsteps = rstep[1]-rstep[0]+1
 
     # (insert memory calculation here)
 
@@ -209,10 +233,10 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
             return np.zeros([nt, nx, ny, nshots, nchan])
         elif case in [1, 2]:
             # extra steps
-            return np.zeros([nt, nx, ny, nshots, nchan, nstep])
+            return np.zeros([nt, nx, ny, nshots, nchan, nsteps])
         elif case is 3:
             # no xy motion, no extra steps
-            return np.zeros([nt, nshots, nchan, nstep])
+            return np.zeros([nt, nshots, nchan, nsteps])
         elif case is 4:
             # standard 3D data run
             return np.zeros([nt, nx, ny, nz, nshots, nchan])
@@ -223,13 +247,14 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
         if case is 0:
             return '(nt, nx, ny, nshots, nchan)'
         elif case in [1, 2]:
-            return '(nt, nx, ny, nshots, nchan, nstep)'
+            return '(nt, nx, ny, nshots, nchan, nsteps)'
         elif case is 3:
-            return '(nt, nshots, nchan, nstep)'
+            return '(nt, nshots, nchan, nsteps)'
         elif case is 4:
             return '(nt, nx, ny, nz, nshots, nchan)'
         else:
             return '()'
+
     dataset = create_dataset(daqconfig)
     hlabel = label_dataset(daqconfig)
 
@@ -250,54 +275,53 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, xrange=None,
             return ishot + nshotss*(ix + nxx*(iy + nyy*istep))
         # data loop >> nshots -> extra variable steps -> xmotion -> ymotion
         elif daqconfig == 2:
-            return ishot + nshotss*(istep + nstep*(ix + nxx*iy))
+            return ishot + nshotss*(istep + nsteps*(ix + nxx*iy))
         # data loop >> nshots
         elif daqconfig == 3:
             return ishot + nshotss*istep
         # data loop >> nshots -> xmotion -> ymotion -> zmotion
         elif daqconfig == 4:
-            return ishot + nshotss*(ix + nxx*iy + nxx*nyy*iz)
+            return ishot + nshotss*(ix + nxx*(iy + nyy*iz))
         else:
             return 0
 
     # start reading in data
-    for iix in range(xrange[0], xrange[1]+1):
-        for iiy in range(yrange[0], yrange[1]+1):
-            for iiz in range(zrange[0], zrange[1]+1):
-                for iishot in range(rshot[0], rshot[1]+1):
-                    iindex = get_shot_index(0, ishot=iishot, ix=iix, iy=iiy)
+    for iix, iiy, iiz, iishot, iistep in product(
+        range(xrange[0], xrange[1]+1), range(yrange[0], yrange[1]+1),
+        range(zrange[0], zrange[1]+1), range(rshot[0], rshot[1]+1),
+            range(rstep[0], rstep[1]+1)):
+        # for loop starts
+        iindex = get_shot_index(daqconfig, ishot=iishot, ix=iix, iy=iiy,
+                                istep=iistep)
 
-                    for jj in range(len(rchan)):
-                        tbx.progress_bar([iix-xrange[0], iiy-yrange[0],
-                                          iiz-zrange[0], iishot-rshot[0], jj],
-                                         [nx, ny, nz, nshots, len(rchan)],
-                                         ['xx', 'yy', 'zz', 'shots', 'chan'])
+        for jj in range(len(rchan)):
+            tbx.progress_bar([iix-xrange[0], iiy-yrange[0], iiz-zrange[0],
+                             iishot-rshot[0], iistep-rstep[0], jj],
+                             [nx, ny, nz, nshots, nsteps, len(rchan)],
+                             ['xx', 'yy', 'zz', 'shots', 'steps', 'chan'])
 
-                        iiboard = boardlist[rchan[jj]]
-                        iichan = chanlist[rchan[jj]]
-                        if sisid == 3302:
-                            temp = lapdlib.read_sis3302_shot(
-                                fname, data_group_name, iboard=iiboard,
-                                ichan=iichan, index=iindex)
-                        elif sisid == 3305:
-                            temp = lapdlib.read_sis3305_shot(
-                                fname, data_group_name, iboard=iiboard,
-                                ichan=iichan, index=iindex)
+            iiboard = boardlist[rchan[jj]]
+            iichan = chanlist[rchan[jj]]
+            if sisid == 3302:
+                temp = lapdlib.read_sis3302_shot(
+                    fname, data_group_name, iboard=iiboard, ichan=iichan,
+                    index=iindex)
+            elif sisid == 3305:
+                temp = lapdlib.read_sis3305_shot(
+                    fname, data_group_name, iboard=iiboard, ichan=iichan,
+                    index=iindex)
 
-                        if daqconfig == 0:
-                            dataset[:, iix-xrange[0], iiy-yrange[0],
-                                    iishot-rshot[0], jj] = np.array(temp)
-                        elif daqconfig in [1, 2]:
-                            dataset[:, iix-xrange[0], iiy-yrange[0],
-                                    iishot-rshot[0], jj, iistep] = \
-                                    np.array(temp)
-                        elif daqconfig == 3:
-                            dataset[:, iishot-rrange[0], jj, iistep
-                                    ] = np.array(temp)
-                        elif daqconfig == 4:
-                            dataset[:, iix-xrange[0], iiy-yrange[0],
-                                    iiz-zrange[0], iishot-rshot[0], jj] = \
-                                    np.array(temp)
+            if daqconfig == 0:
+                dataset[:, iix-xrange[0], iiy-yrange[0], iishot-rshot[0],
+                        jj] = np.array(temp)
+            elif daqconfig in [1, 2]:
+                dataset[:, iix-xrange[0], iiy-yrange[0], iishot-rshot[0],
+                        jj, iistep] = np.array(temp)
+            elif daqconfig == 3:
+                dataset[:, iishot-rshot[0], jj, iistep] = np.array(temp)
+            elif daqconfig == 4:
+                dataset[:, iix-xrange[0], iiy-yrange[0], iiz-zrange[0],
+                        iishot-rshot[0], jj] = np.array(temp)
 
     tbx.qprint(quiet, '!!! '+hlabel+' = '+str(dataset.shape))
 

@@ -1,9 +1,9 @@
 '''
 NAME:           read_lapd_lib.py
 AUTHOR:         swjtang
-DATE:           15 Jan 2021
+DATE:           28 Feb 2021
 DESCRIPTION:    A library of helper functions used to read the hdf5 file
-                from LAPD
+                from LAPD.
 '''
 import h5py
 import re
@@ -15,8 +15,9 @@ import lib.toolbox as tbx
 
 def check_devices(fname):
     # Check devices used to write data file (auxillary function) -------------
+    # the indexing order is important
     devices = ['6K Compumotor', 'SIS crate', 'SIS 3302', 'SIS 3305',
-               'SIS 3301', 'n5700', 'NI_XZ', 'NI_XYZ']
+               'SIS 3301', 'n5700', 'NI_XZ', 'NI_XYZ', 'Waveform']
 
     ff = h5py.File(fname, 'r')
 

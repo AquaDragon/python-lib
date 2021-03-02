@@ -1,7 +1,7 @@
 '''
 NAME:           fname_tds.pro
 AUTHOR:         swjtang
-DATE:           15 Jan 2021
+DATE:           02 Mar 2021
 DESCRIPTION:    Returns filenames of TDS .hdf5 files with a single call number
 INPUTS:         callnumber = the id of the file to be read
                 full       = (optional) returns the filename only if set to 0
@@ -30,6 +30,7 @@ def fname_tds(callnumber, full=1, old=0):
     dir6 = '/BAPSF_Data/TDS/18_Nov/'
     dir7 = '/BAPSF_Data/TDS/19_Apr/'
     dir8 = '/BAPSF_Data/TDS/19_July/'
+    dir9 = '/BAPSF_Data/TDS/21_Feb/'
     dirA = '/data_old/BAPSF_Data/LaB6_Cathode/FluxRopes_2_14/'
 
     dirS = '/BAPSF_Data/LaB6_Cathode/Single5cmFluxRope/'
@@ -351,6 +352,38 @@ def fname_tds(callnumber, full=1, old=0):
         623: [dir8, '23_Mach31_37_Bfix32_42.hdf5'],
         624: [dir8, '24_Mach29_45_Bfix32_42.hdf5'],
         625: [dir8, '25_Mach27_43_Bmov31_Bfix32_42_aborted.hdf5'],
+
+
+        # ---------------------------------------------------------------------
+        #    DATARUN 9 (21_Feb): 19 FEB 2021
+        # --------------------------------------------------------------------
+        700: [dir9, '00_get_SIScrate_offsets.hdf5'],
+        701: [dir9, '01_newLaB6_intialize.hdf5'],
+        702: [dir9, '02_fluxrope_100V_Isat34_Bdot37.hdf5'],
+        # 702: motionid = 0 is stationary (fix probe on a probe drive)
+        #      bdot data not good
+        703: [dir9, '03_fluxrope_80V_Isat34_Bdot37.hdf5'],
+        '704a': [dir9, '04a_fluxrope_120V_Bdot37.hdf5'],
+        704: [dir9, '04_fluxrope_120V_Isat34_Bdot37.hdf5'],
+        '705a': [dir9, '05a_fluxrope_120V_Bdot31.hdf5'],
+        '705b': [dir9, '05b_fluxrope_70V_Bdot31.hdf5'],
+        '705c': [dir9, '05c_fluxrope_80V_Bdot31.hdf5'],
+        '705d': [dir9, '05d_fluxrope_90V_Bdot31.hdf5'],
+        '705e': [dir9, '05e_fluxrope_100V_Bdot31.hdf5'],
+        '705f': [dir9, '05f_fluxrope_110V_Bdot31.hdf5'],
+        '705g': [dir9, '05g_fluxrope_130V_Bdot31.hdf5'],
+        '705h': [dir9, '05h_fluxrope_140V_Bdot31.hdf5'],
+        706: [dir9, '06_fluxrope_140V_Bdot37.hdf5'],
+        # 706: motionid = 0 is stationary (fix probe on a probe drive) use 1
+        707: [dir9, '07_fluxrope_120V_Bdot45.hdf5'],
+        710: [dir9, '10_fluxrope_120V_RFEA34.hdf5'],
+        # 710: (x,y) = 3.41, -0.02 cm
+        711: [dir9, '11_fluxrope_120V_RFEA34.hdf5'],
+        # 711: (x,y) = 0, 0 cm
+        712: [dir9, '12_fluxrope_120V_RFEA34.hdf5'],
+        # 712: (x,y) = 10, 0 cm
+        713: [dir9, '13_fluxrope_120V_RFEA34.hdf5'],
+        # 713: (x,y) = 3.41, -0.02 cm (face main cathode)
 
 
         # --------------------------------------------------------------------

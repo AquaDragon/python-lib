@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           15 Jan 2021
+DATE:           02 Mar 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -62,7 +62,7 @@ def show_progress_bar(*args, **kwargs):
     progress_bar(*args, **kwargs)
 
 
-def prefig(figsize=(16, 4.5), labelsize=40, ticksize=25, xlabel='x',
+def prefig(figsize=(16, 4.5), labelsize=35, ticksize=25, xlabel='x',
            ylabel='y'):
     ''' ----------------------------------------------------------------------
     Preamble to create a figure with appropriate labels.
@@ -104,7 +104,7 @@ def get_line_profile(x, y, data, axis='x', value=0):
 '''
 
 
-def filter_bint(data, dt=None, mrange=None):
+def filter_bint(data, dt=1, mrange=None, axis=0, quiet=0):
     ''' ----------------------------------------------------------------------
     A function used to integrate B-dot. Assumes first dimension is time.
         (IDL: filter_bint.pro)
@@ -115,17 +115,15 @@ def filter_bint(data, dt=None, mrange=None):
         mrange  = 2-element array indicating start and stop indices of array
                   to take the mean.
     '''
-    print('Integrating B-dot data...', end=' ')
-    mean_val = np.mean(data, axis=0)
+    qprint(quiet, 'Integrating B-dot data...', end=' ')
+    mean_val = np.mean(data, axis=axis)
     if mrange is not None:
         if len(mrange) == 2:
             mean_val = np.mean(data[int(mrange[0]):int(mrange[1]), ...],
-                               axis=0)
-    if dt is None:
-        dt = 1
-    print('Mean complete, taking cumulative sum...')
-    bint_data = np.cumsum(data-mean_val, axis=0)*dt
-    print('Done!')
+                               axis=axis)
+    qprint(quiet, 'Mean complete, taking cumulative sum...')
+    bint_data = np.cumsum(data-mean_val, axis=axis)*dt
+    qprint(quiet, 'Done!')
     # mean_val is broadcast into the dimensions of data, requiring the first
     # dimension to be time or the trailing axes won't align.
     return bint_data
@@ -243,13 +241,14 @@ def smooth(data, nwindow=351, polyn=2, **kwargs):
 '''
 
 
-def average_fft(data, time, dt=1, axis=0, average=1):
+def average_fft(data, time, dt=1, axis=0, avgflag=1):
     ''' --------------------------------------------------------------------------
     FFT then average over dimensions in a multi-dimensional dataset.
         (IDL: avgfft.pro)
         data = array of dimensions (nt,nx,ny,nshot,nchan)
         time = array of time values\
         axis = the index of the time axis on the data (does not get averaged)
+        avgflag = Set to any other value to disable averaging. Default is 1.
     '''
     ndim = len(data.shape)
     if len(time) != 0:
@@ -259,7 +258,7 @@ def average_fft(data, time, dt=1, axis=0, average=1):
 
     print('Calculating FFTs...', end=' ')
     fftarr = np.fft.fft(data, axis=axis, norm='ortho')
-    if average == 1:
+    if avgflag == 1:
         print('Averaging FFTs...', end=' ')
         fftavg = np.mean(abs(fftarr), axis=tuple([ii for ii in range(ndim) if
                          (ii != axis)]))
@@ -281,7 +280,8 @@ def plot_fft(data, freqarr, frange=None, units='kHz', title='set title=',
     Plots the FFT of a given dataset.
     INPUTS:
         data    = The FFT spectra of the data to be plotted
-        freqarr = The frequency array of the corresponidng FFT
+        freqarr = The frequency array of the corresponding FFT
+                  Input frequencies in kHz.
     OPTIONAL:
         frange  = Range of data to show
         units   = The units of the frequency array
@@ -497,6 +497,15 @@ def qprint(quiet, *args, **kwargs):
     '''
     if quiet == 0:
         print(*args, **kwargs)
+
+
+def read_ascii(fname):
+    ''' ----------------------------------------------------------------------
+    A function to read ascii files from the Tektronic scope and load it into
+    an array. Output arrays are time and data.
+    '''
+    data = np.loadtxt(fname, skiprows=5, delimiter=',')
+    return data[:, 0], data[:, 1]
 
 
 def savefig(*args, **kwargs):

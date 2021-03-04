@@ -1,7 +1,7 @@
 '''
 NAME:           spikes.py
 AUTHOR:         swjtang
-DATE:           15 Jan 2021
+DATE:           03 Mar 2021
 DESCRIPTION:    A toolbox of functions relating to spike finding & statistics.
 ------------------------------------------------------------------------------
 to reload module:
@@ -18,13 +18,22 @@ import scipy
 import lib.toolbox as tbx
 
 
-def spike_finder(data, prom=0):
-    sampledata = data - np.max(data)
-    dist = 1000   # [px] minimum horizontal dist between peaks
-    width = 100   # [px] required width of peaks
+def spike_finder(data, flip=1, **kwargs):
     # prom - required prominence of peaks
-    peaks, prop = scipy.signal.find_peaks(-sampledata, distance=dist,
-                                          width=width, prominence=prom)
+    if flip == 1:
+        sampledata = -(data - np.max(data))
+    else:
+        sampledata = data - np.max(data)
+
+    if 'distance' not in kwargs.keys():
+        # [px] minimum horizontal dist between peaks
+        kwargs['distance'] = 1000
+
+    if 'width' not in kwargs.keys():
+        # [px] required width of peaks
+        kwargs['width'] = 100
+
+    peaks, prop = scipy.signal.find_peaks(sampledata, **kwargs)
     # fwhm = scipy.signal.peak_widths(-sampledata, peaks, rel_height=0.5)
     # (fwhm output is the same as 'widths', 'width_heights', 'left_ips',
     #  'right_ips' in prop)

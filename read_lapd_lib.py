@@ -1,7 +1,7 @@
 '''
 NAME:           read_lapd_lib.py
 AUTHOR:         swjtang
-DATE:           28 Feb 2021
+DATE:           03 Mar 2021
 DESCRIPTION:    A library of helper functions used to read the hdf5 file
                 from LAPD.
 '''
@@ -507,7 +507,7 @@ def read_sisboard_shot(fname, sisid, config_name, iboard=1, ichan=1, index=0):
         return None
 
 
-def read_msi_info(fname):
+def read_msi_info(fname, quiet=0):
     # Read MSI information ---------------------------------------------------
     config_list = '/MSI/'
     msi_subgroup_list = get_subgroup_names(fname, config_list)
@@ -550,8 +550,8 @@ def read_msi_info(fname):
 
     # Return B-field MSI information -----------------------------------------
     bfield_info = unload_dataset_info(fname, '/MSI/Magnetic field/')
-    print(bfield_info)
-    print(bfield_info['Magnetic field profile'])
+    tbx.qprint(quiet, bfield_info)
+    tbx.qprint(quiet, bfield_info['Magnetic field profile'])
 
     # incomplete ----------------------
     temp = {

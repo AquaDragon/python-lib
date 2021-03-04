@@ -1,7 +1,7 @@
 '''
 NAME:           read_lapd_data.py
 AUTHOR:         swjtang
-DATE:           28 Feb 2021
+DATE:           03 Mar 2021
 DESCRIPTION:    Reads .hdf5 file created from LAPD data acquisition system.
 '''
 import h5py
@@ -148,7 +148,7 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, rstep=None,
 
     # check if Waveform module active -----------------------------------------
     if device_check[8]:
-        print('!!! Note: Waveform module is active.')
+        tbx.qprint(quiet, '!!! Note: Waveform module is active.')
 
     # Now read the data -------------------------------------------------------
     # The following checks the user input for the range of values to be read
@@ -337,6 +337,6 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, rstep=None,
         'chanid':   chanlist,
         'channame': dtypelist,
         'desc':     lapdlib.get_description(fname),
-        'msi':      lapdlib.read_msi_info(fname)
+        'msi':      lapdlib.read_msi_info(fname, quiet=quiet)
     }
     return temp

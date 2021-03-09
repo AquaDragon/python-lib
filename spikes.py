@@ -1,7 +1,7 @@
 '''
 NAME:           spikes.py
 AUTHOR:         swjtang
-DATE:           03 Mar 2021
+DATE:           05 Mar 2021
 DESCRIPTION:    A toolbox of functions relating to spike finding & statistics.
 ------------------------------------------------------------------------------
 to reload module:
@@ -18,8 +18,9 @@ import scipy
 import lib.toolbox as tbx
 
 
-def spike_finder(data, flip=1, **kwargs):
-    # prom - required prominence of peaks
+def spike_finder(data, flip=0, **kwargs):
+    # Uses scipy's find_peaks to search for peaks in the data
+    # flip = Multiplies data by -1 if set to 1.
     if flip == 1:
         sampledata = -(data - np.max(data))
     else:

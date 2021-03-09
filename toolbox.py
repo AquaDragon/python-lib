@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           02 Mar 2021
+DATE:           07 Mar 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -332,7 +332,7 @@ def plot_fft(data, freqarr, frange=None, units='kHz', title='set title=',
     return temp
 
 
-def fft_peak_find(fftdata, freqarr, frange=[0, 1], plot=1):
+def fft_peak_find(fftdata, freqarr, frange=[0, 1], plot=0):
     ''' ----------------------------------------------------------------------
     Finds the most prominent peak frequency in the FFT by slicing.
         fftdata = The FFT spectra of the data
@@ -368,7 +368,7 @@ def c_correlate(sig1, sig2):
     c11 = np.correlate(sig1, sig1)  # auto-correlation of signal 1
     c22 = np.correlate(sig2, sig2)  # auto-correlation of signal 2
 
-    return [ii/np.sqrt(c11*c22) for ii in c12]
+    return c12/np.sqrt(c11*c22)
 
 
 def value_locate(array, value):

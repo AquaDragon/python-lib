@@ -1,7 +1,7 @@
 '''
 NAME:           read_lapd_data.py
 AUTHOR:         swjtang
-DATE:           03 Mar 2021
+DATE:           09 Mar 2021
 DESCRIPTION:    Reads .hdf5 file created from LAPD data acquisition system.
 '''
 import h5py
@@ -59,7 +59,10 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, rstep=None,
     nx = motion_data['nx']
     ny = motion_data['ny']
     nz = motion_data['nz']
-    nshots = motion_data['nshots']
+    if 1 in [device_check[0], device_check[6]] and (nsteps > 1):
+        nshots = motion_data['nshots'] // nsteps
+    else:
+        nshots = motion_data['nshots']
     x = motion_data['x']
     y = motion_data['y']
     z = motion_data['z']
@@ -193,25 +196,27 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, rstep=None,
         temp = np.unique(rchan)
         rchan = temp[np.where(temp < nchan)]
 
+    # Prints the range of values that the function is reading
+    def print_range(value_str, vrange):
+        tbx.qprint(quiet, '{0:13} = {1} to {2}'.format(value_str+' range',
+            vrange[0], vrange[1]))
+
     tbx.qprint(quiet, '----------------------------------------------------'
                '--------')
     tbx.qprint(quiet, 'Data geometry = {0}'.format(geom))
     tbx.qprint(quiet, 'Read Channels = '+'   '.join([str(ii) for ii in rchan]))
-    tbx.qprint(quiet, 'Shot range    = {0} to {1}'.format(rshot[0], rshot[1]))
-    if daqconfig not in [3]:
-        tbx.qprint(quiet, 'X value range = {0} to {1}'.format(
-            xrange[0], xrange[1]))
+    print_range('Shot', rshot)
+    if daqconfig in [1, 2, 3]:
+        print_range('Step', rstep)
+    if daqconfig in [0, 1, 2, 4]:
+        print_range('X value', xrange)
         if geom == 'xz-plane':
-            tbx.qprint(quiet, 'Z value range = {0} to {1}'.format(
-                zrange[0], zrange[1]))
+            print_range('Z value', zrange)
         elif geom == 'xyz-volume':
-            tbx.qprint(quiet, 'Y value range = {0} to {1}'.format(
-                yrange[0], yrange[1]))
-            tbx.qprint(quiet, 'Z value range = {0} to {1}'.format(
-                zrange[0], zrange[1]))
+            print_range('Y value', yrange)
+            print_range('Z value', zrange)
         else:
-            tbx.qprint(quiet, 'Y value range = {0} to {1}'.format(
-                yrange[0], yrange[1]))
+            print_range('Y value', yrange)
 
     # store original values
     ntt, nxx, nyy, nzz = nt, nx, ny, nz
@@ -316,9 +321,10 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, rstep=None,
                         jj] = np.array(temp)
             elif daqconfig in [1, 2]:
                 dataset[:, iix-xrange[0], iiy-yrange[0], iishot-rshot[0],
-                        jj, iistep] = np.array(temp)
+                        jj, iistep-rstep[0]] = np.array(temp)
             elif daqconfig == 3:
-                dataset[:, iishot-rshot[0], jj, iistep] = np.array(temp)
+                dataset[:, iishot-rshot[0], jj, iistep-rstep[0]] = \
+                    np.array(temp)
             elif daqconfig == 4:
                 dataset[:, iix-xrange[0], iiy-yrange[0], iiz-zrange[0],
                         iishot-rshot[0], jj] = np.array(temp)

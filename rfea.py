@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           07 Mar 2021
+DATE:           12 Mar 2021
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -48,7 +48,7 @@ def find_Ti(xx, yy, plot=0, width=40, xmax=0, xoff=10):
         plt.plot(xx[max(iimax-xoff, 0)], yy[max(iimax-xoff, 0)], 'o')
         plt.plot(xx[iimin], yy[iimin], 'o')
 
-    guess = [yy[iimax]-yy[iimin], 0.2, yy[iimin], xx[iimax]]
+    guess = [yy[iimax]-yy[iimin], 1, yy[iimin], xx[iimax]]
 
     popt, pcov = curve_fit(gauss_func, xx[max(iimax-xoff, 0):iimin],
                            yy[max(iimax-xoff, 0):iimin], p0=guess)
@@ -64,7 +64,8 @@ def find_Ti(xx, yy, plot=0, width=40, xmax=0, xoff=10):
 
 # Finds Ti from an exponential plot; The curve starts from some max value then
 # decays exponentially.
-def find_Ti_exp(volt, curr, plot=0, startpx=200, endpx=100, mstime=0, fid=0):
+def find_Ti_exp(volt, curr, plot=0, startpx=100, endpx=100, mstime=0, fid=0,
+                save=1):
     '''
     startpx = number of pixels to count at the start to determine max value
     endpx   = number of pixels to count at the end to determine min value
@@ -80,23 +81,35 @@ def find_Ti_exp(volt, curr, plot=0, startpx=200, endpx=100, mstime=0, fid=0):
     start = np.mean(temp[:startpx])
     end = np.mean(temp[-endpx:])
 
-    guess = [start-end, 1, end, volt[argmin]]
-    popt, pcov = curve_fit(exp_func, volt[argmin:], temp[argmin:], p0=guess)
+    guess = [start-end, 2, end, volt[argmin]]
+    bound_down = [0.1*(start-end), 0, end-start, volt[0]]
+    bound_up = [+np.inf, 50, start, volt[-1]]
+    try:
+        popt, pcov = curve_fit(exp_func, volt[argmin:], temp[argmin:], p0=guess,
+                               bounds=(bound_down, bound_up))
+    except:
+        return None, None
 
     Vp = volt[np.argmin(abs([start for ii in volt] - exp_func(volt, *popt)))]
-    Ti = 1/popt[1]
+    Ti = popt[1]
+    Ti_err = np.sqrt(np.diag(pcov))[1]
 
     if plot != 0:
-        tbx.prefig(xlabel='peak pulse potential [V]', ylabel='current [$\mu$A]')
+        tbx.prefig(xlabel='peak pulse potential [V]', 
+                   ylabel='current [$\mu$A]')
         plt.plot(volt, temp, label='{0} ms'.format(mstime))
-        plt.title('{0} exponential fit, t = {1:.2f} ms'.format(fid, mstime), fontsize = 20)
+        plt.title('{0} exponential fit, t = {1:.2f} ms'.format(fid, mstime),
+                  fontsize = 20)
         plt.plot(volt[argmin:], temp[argmin:])
         plt.plot(volt, [start for ii in volt], '--')
+        plt.plot(volt, [end for ii in volt], '--')
         plt.plot(volt[argmin-20:], exp_func(volt[argmin-20:], *popt), '--')
         plt.ylim(np.min(temp)*0.96, np.max(temp)*1.04)
-        tbx.savefig('./img/{0}-currpeak-exp-fit-{1:.2f}ms.png'.format(fid, mstime))
+        if save == 1:
+            tbx.savefig('./img/{0}-currpeak-exp-fit-{1:.2f}ms.png'.format(
+                        fid, mstime))
 
-    return Vp, Ti
+    return Vp, Ti, Ti_err
 
 
 # Calculates the current derivative -dI/dV
@@ -138,14 +151,21 @@ def plot_IVderiv(volt, curr, xoff=0, yoff=0, nwindow=51, polyn=3, **kwargs):
 
 
 # Browses the data and returns the selected trange
-def browse_data(data, step=0, shot=0, chan=0, trange=[0,-1]):
+def browse_data(data, x=None, y=None, step=0, shot=0, chan=0, trange=[0,-1]):
     t1 = trange[0]
     t2 = np.min([data.shape[0], trange[1]])
-    temp = data[:, step, shot, chan]
-
     tbx.prefig(xlabel='time [px]', ylabel='magnitude')
-    plt.title('step = {0}, shot = {1}, chan = {2}, trange = [{3}, {4}]'.\
-        format(step, shot, chan, trange[0], trange[1]), fontsize=20)
+
+    if (x == None) and (y == None):
+        temp = data[:, step, shot, chan]
+        plt.title('step = {0}, shot = {1}, chan = {2}, trange = [{3}, {4}]'.\
+            format(step, shot, chan, trange[0], trange[1]), fontsize=20)
+    else:
+        temp = data[:, x, y, step, shot, chan]
+        plt.title('(x, y) = ({0:.2f}, {1:.2f}), step = {2}, shot = {3}, '
+            ' chan = {4}, trange = [{5}, {6}]'.format(
+            x, y, step, shot, chan, trange[0], trange[1]), fontsize=20)
+    
     plt.plot(temp)
     plt.plot([t1,t1], [np.min(temp), np.max(temp)], 'orange')
     plt.plot([t2,t2], [np.min(temp), np.max(temp)], 'orange')
@@ -175,4 +195,4 @@ def gauss_func(x, a, b, c, x0):
 
 
 def exp_func(x, a, b, c, x0):
-    return a * np.exp(-b * (x-x0)) + c
+    return a * np.exp(-(x-x0)/b) + c

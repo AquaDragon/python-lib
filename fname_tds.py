@@ -1,7 +1,7 @@
 '''
 NAME:           fname_tds.pro
 AUTHOR:         swjtang
-DATE:           02 Mar 2021
+DATE:           16 Mar 2021
 DESCRIPTION:    Returns filenames of TDS .hdf5 files with a single call number
 INPUTS:         callnumber = the id of the file to be read
                 full       = (optional) returns the filename only if set to 0
@@ -376,6 +376,8 @@ def fname_tds(callnumber, full=1, old=0):
         706: [dir9, '06_fluxrope_140V_Bdot37.hdf5'],
         # 706: motionid = 0 is stationary (fix probe on a probe drive) use 1
         707: [dir9, '07_fluxrope_120V_Bdot45.hdf5'],
+
+        # -----------------------------------------------------------
         710: [dir9, '10_fluxrope_120V_RFEA34.hdf5'],
         # 710: (x,y) = 3.41, -0.02 cm
         711: [dir9, '11_fluxrope_120V_RFEA34.hdf5'],
@@ -383,8 +385,42 @@ def fname_tds(callnumber, full=1, old=0):
         712: [dir9, '12_fluxrope_120V_RFEA34.hdf5'],
         # 712: (x,y) = 10, 0 cm
         713: [dir9, '13_fluxrope_120V_RFEA34.hdf5'],
-        # 713: (x,y) = 3.41, -0.02 cm (face main cathode)
+        714: [dir9, '14_fluxrope_120V_RFEA34_up.hdf5'],
+        715: [dir9, '15_fluxrope_120V_RFEA34_down.hdf5'],
+        716: [dir9, '16_fluxrope_120V_RFEA34_NE.hdf5'],
+        717: [dir9, '17_fluxrope_120V_RFEA34_NW.hdf5'],
+        719: [dir9, '19_fluxrope_120V_RFEA34_SW.hdf5'],
+        # Runs 713 - 719:  (x,y) = 3.41, -0.02 cm 
+		# 713: face main cathode
+        # 714: face up, +y
+        # 715: face down, -y
+        # 716: face up, towards old LaB6, +y, -z
+        # 717: face up, towards main LaB6, +y, +z
+        # There is no run 718.
+        # 719: face down, towards main LaB6, -y, -z
 
+        # -----------------------------------------------------------
+        '720b': [dir9, '20_fluxrope_120V_RFEA34_line_posy (stopped).hdf5'],
+        # 720b: Line sweep, stopped midway and had to restart
+        720: [dir9, '20_fluxrope_120V_RFEA34_line_posy.hdf5'],
+        # 720: Line sweep, x = 3.41 cm, y = 4, 8, 12, 16 cm
+        721: [dir9, '21_fluxrope_120V_RFEA34_line_negy.hdf5'],
+        # 721: Line sweep, x = 3.41 cm, y = -4, -8, -12, -16 cm
+        722: [dir9, '22_fluxrope_120V_RFEA34_line_posx.hdf5'],
+        # 722: Line sweep, x = 4, 8, 12, 16 cm, y = 3 cm
+        '723b': [dir9, '23_fluxrope_120V_RFEA34_line_negx (stopped).hdf5'],
+        # 723: x = -16 cm, y = 3 cm. Stopped midway had to restart
+        723: [dir9, '23_fluxrope_120V_RFEA34_line_negx.hdf5'],
+        # 723: Line sweep, x = 0, -4, -8, -12, y = 3 cm
+
+        # -----------------------------------------------------------
+        724: [dir9, '24_fluxrope_120V_RFEA34_plane_600mV.hdf5'],
+        725: [dir9, '25_fluxrope_120V_RFEA34_plane_700mV.hdf5'],
+        726: [dir9, '26_fluxrope_120V_RFEA34_plane_500mV.hdf5'],
+        727: [dir9, '27_fluxrope_120V_RFEA34_plane_550mV (stopped).hdf5'],
+        728: [dir9, '28_fluxrope_120V_RFEA34_plane_650mV.hdf5'],
+        # 724 - 728: 41x41 plane, 100 shots
+        # run 727 stopped midway, aborted
 
         # --------------------------------------------------------------------
         #    OLD DATARUN (FluxRopes_2_14)

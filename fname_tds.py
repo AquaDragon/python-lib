@@ -1,7 +1,7 @@
 '''
 NAME:           fname_tds.pro
 AUTHOR:         swjtang
-DATE:           16 Mar 2021
+DATE:           7 Apr 2021
 DESCRIPTION:    Returns filenames of TDS .hdf5 files with a single call number
 INPUTS:         callnumber = the id of the file to be read
                 full       = (optional) returns the filename only if set to 0
@@ -355,7 +355,7 @@ def fname_tds(callnumber, full=1, old=0):
 
 
         # ---------------------------------------------------------------------
-        #    DATARUN 9 (21_Feb): 19 FEB 2021
+        #    DATARUN 9 (21_Feb): 19 FEB - 28 MAR 2021
         # --------------------------------------------------------------------
         700: [dir9, '00_get_SIScrate_offsets.hdf5'],
         701: [dir9, '01_newLaB6_intialize.hdf5'],
@@ -390,8 +390,8 @@ def fname_tds(callnumber, full=1, old=0):
         716: [dir9, '16_fluxrope_120V_RFEA34_NE.hdf5'],
         717: [dir9, '17_fluxrope_120V_RFEA34_NW.hdf5'],
         719: [dir9, '19_fluxrope_120V_RFEA34_SW.hdf5'],
-        # Runs 713 - 719:  (x,y) = 3.41, -0.02 cm 
-		# 713: face main cathode
+        # Runs 713 - 719:  (x,y) = 3.41, -0.02 cm
+        # 713: face main cathode
         # 714: face up, +y
         # 715: face down, -y
         # 716: face up, towards old LaB6, +y, -z
@@ -421,6 +421,23 @@ def fname_tds(callnumber, full=1, old=0):
         728: [dir9, '28_fluxrope_120V_RFEA34_plane_650mV.hdf5'],
         # 724 - 728: 41x41 plane, 100 shots
         # run 727 stopped midway, aborted
+
+        729: [dir9, '29_fluxrope_80V_RFEA34.hdf5'],
+        730: [dir9, '30_fluxrope_80V_RFEA34_plane_525mV.hdf5'],
+        731: [dir9, '31_fluxrope_80V_RFEA34_2point.hdf5'],
+        # 729 - 731: 80V flux rope discharge
+
+        '732b': [dir9, '32_fluxrope_120V_RFEA45 (stopped).hdf5'],
+        732: [dir9, '32_fluxrope_120V_RFEA45_restart.hdf5'],
+        733: [dir9, '33_fluxrope_120V_RFEA45_edge_2point.hdf5'],
+        # 732 - 733: RFEA moved to port 45
+
+        734: [dir9, '34_fluxrope_120V_dipole34_plane.hdf5'],
+        # 734: dipole probe at port 34
+
+        735: [dir9, '35_fluxrope_120V_RFEA45_2point.hdf5'],
+        736: [dir9, '36_fluxrope_120V_RFEA45_plane_600mV.hdf5'],
+        # 735 - 736: continuation of 732, 733
 
         # --------------------------------------------------------------------
         #    OLD DATARUN (FluxRopes_2_14)

@@ -1,7 +1,7 @@
 '''
 NAME:           read_lapd_data.py
 AUTHOR:         swjtang
-DATE:           09 Mar 2021
+DATE:           21 Mar 2021
 DESCRIPTION:    Reads .hdf5 file created from LAPD data acquisition system.
 '''
 import h5py
@@ -60,7 +60,13 @@ def read_lapd_data(fname, daqconfig=0, rchan=None, rshot=None, rstep=None,
     ny = motion_data['ny']
     nz = motion_data['nz']
     if 1 in [device_check[0], device_check[6]] and (nsteps > 1):
-        nshots = motion_data['nshots'] // nsteps
+        nscheck = motion_data['nshots'] // nsteps
+        if nscheck == nshots:
+            nshots = nscheck
+        else:
+            tbx.qprint(quiet, '!!! nsteps * nshots does not match total'
+                       ' shots (= {0})'.format(motion_data['nshots']))
+            return 0
     else:
         nshots = motion_data['nshots']
     x = motion_data['x']

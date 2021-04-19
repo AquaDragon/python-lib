@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           07 Mar 2021
+DATE:           19 Apr 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -232,6 +232,9 @@ def smooth(data, nwindow=351, polyn=2, **kwargs):
         polyn   = Order of the polynomial used to fit the samples.
                   Must be less than nwindow.
     '''
+    # If nwindow is even, make it odd
+    if np.mod(nwindow, 2) == 0:
+        nwindow += 1
     return scipy.signal.savgol_filter(data, nwindow, polyn, **kwargs)
 
 

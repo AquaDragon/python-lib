@@ -1,7 +1,7 @@
 '''
 NAME:               average_fft_data.py
 AUTHOR:             swjtang
-DATE:               15 Jan 2021
+DATE:               20 Apr 2021
 DESCRIPTION:        Function to average FFT
 REQUIRED INPUTS:    data = A formatted numpy array in order of
                            (nt,nx,ny,nshots,nchan)
@@ -26,8 +26,14 @@ import scipy.constants as const
 from matplotlib import pyplot as plt
 
 
-def average_fft_data(data, time, bfield=1, meanrange=[0, 1000], frange=[2, 30],
-                     fid=0, fname=None, ch1='(ch1)', ch2='(ch2)'):
+def average_fft_data(data, time, bfield=1, meanrange=None, frange=None, fid=0,
+                     fname=None, ch1='(ch1)', ch2='(ch2)'):
+    # Set default values
+    if meanrange is None:
+        meanrange = [0, 1000]
+    if frange is None:
+        frange = [2, 30]
+
     # Check inputs
     dt = time[1]-time[0]
     name = '{0}_FFT_ch{1}_{2}'.format(fid, ch1, ch2)

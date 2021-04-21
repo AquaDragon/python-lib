@@ -1,7 +1,7 @@
 '''
 NAME:               analyzeIV.py
 AUTHOR:             swjtang
-DATE:               16 Jan 2021
+DATE:               20 Apr 2021
 DESCRIPTION:        A routine to calculate temperature, plasma potential and
                     density from an IV curve.
 REQUIRED INPUTS:    voltage = [V] voltage sweep of IV curve
@@ -31,7 +31,10 @@ import lib.toolbox as tbx
 
 
 def analyzeIV(voltage, current, res=1, area=1, gain_curr=1, gain_volt=1,
-              lim=[0.25, 0.75, 0.8], noplot=0, quiet=0, nwindow=351):
+              lim=None, noplot=0, quiet=0, nwindow=351):
+    # Set default values
+    if lim is None:
+        lim = [0.25, 0.75, 0.8]
     # Constants
     amu = const.physical_constants['atomic mass constant'][0]
 

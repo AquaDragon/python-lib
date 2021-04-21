@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           19 Apr 2021
+DATE:           20 Apr 2021
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -125,7 +125,11 @@ def IVderiv(curr, scale=1, nwindow=51, polyn=3, **kwargs):
 
 # Given arrays of (1) step number, (2) argtime and (3) peak current
 # corresponding to each peak, returns peaks that fulfil input conditions
-def select_peaks(step_arr, argtime_arr, peakcurr_arr, step=0, trange=[0,1]):
+def select_peaks(step_arr, argtime_arr, peakcurr_arr, step=0, trange=None):
+    # Set default trange
+    if trange is None:
+        trange = [0, 1]
+
     ind = np.where((argtime_arr > trange[0]) & (argtime_arr <= trange[1]) &
                    (step_arr == step))
     return peakcurr_arr[ind]
@@ -143,7 +147,7 @@ def mstime(time, ind, start=5, off=0):
 ------------------------------------------------------------------------------
 '''
 def condavg_rfea(data, bdata, nsteps, nshots, trange=None, btrange=None,
-                 ref=[0, 0], bref=None):
+                 ref=None, bref=None):
     ''' ----------------------------------------------------------------------
     Conditionally avarage shift of RFEA current data.
     INPUTS:   data    = np.array with the data to be conditionally averaged.
@@ -155,6 +159,7 @@ def condavg_rfea(data, bdata, nsteps, nshots, trange=None, btrange=None,
     OPTIONAL: ref = [step, shot] number of the reference shot
               bref = Inputs a reference shot for conditional averaging
     '''
+    # Set default values
     if trange is not None:
         t1, t2 = trange
     else:
@@ -164,6 +169,9 @@ def condavg_rfea(data, bdata, nsteps, nshots, trange=None, btrange=None,
         bt1, bt2 = btrange
     else:
         bt1, bt2 = t1, t2
+
+    if ref is None:
+        ref = [0, 0]
 
     # Current array, shifted in phase
     curr_arr = np.zeros((t2-t1, nsteps, nshots))
@@ -236,7 +244,11 @@ def plot_IVderiv(volt, curr, xoff=0, yoff=0, nwindow=51, polyn=3, **kwargs):
 
 
 # Browses the data and returns the selected trange
-def browse_data(data, x=None, y=None, step=0, shot=0, chan=0, trange=[0,-1]):
+def browse_data(data, x=None, y=None, step=0, shot=0, chan=0, trange=None):
+    # Set default trange
+    if trange is None:
+        trange = [0, -1]
+
     t1 = trange[0]
     t2 = np.min([data.shape[0], trange[1]])
     tbx.prefig(xlabel='time [px]', ylabel='magnitude')

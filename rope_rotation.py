@@ -1,7 +1,7 @@
 '''
 NAME:           rope_rotation.py
 AUTHOR:         swjtang
-DATE:           15 Jan 2021
+DATE:           20 Apr 2021
 DESCRIPTION:    Functions used for the rope rotation model.
 -------------------------------------------------------------------------------
 to reload module:
@@ -43,7 +43,7 @@ def source_to_obsv(xs, ys, xo, yo):
 '''
 
 
-def get_circle_points(r=1, center=[0, 0], Lmode=5, phase=0):
+def get_circle_points(r=1, center=None, Lmode=5, phase=0):
     ''' ----------------------------------------------------------------------
     Given the radius and center of circle, find coordinates of L points on a
     circle.
@@ -52,6 +52,8 @@ def get_circle_points(r=1, center=[0, 0], Lmode=5, phase=0):
         Lmode  = Number of points, also azimuthal mode number
         phase  = Adds a phase in units of omega*t
     '''
+    if center is None:
+        center = [0, 0]
     xarr, yarr = [], []    # arrays for coordinates on a circle
     for th0 in np.linspace(0, 2*np.pi, Lmode, dtype='float', endpoint=False):
         angle = th0 + phase

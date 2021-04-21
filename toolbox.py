@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           19 Apr 2021
+DATE:           20 Apr 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -129,11 +129,15 @@ def filter_bint(data, dt=1, mrange=None, axis=0, quiet=0):
     return bint_data
 
 
-def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=[0, 50]):
+def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=None):
     ''' ----------------------------------------------------------------------
     A function to apply filters to a data set (non-FFT).
         (IDL: filterfreq.pro)
     '''
+    # Set default frange
+    if frange is None:
+        frange = [0, 50]
+
     fftarr = np.fft.fft(data, norm='ortho')
     freqarr = np.fft.fftfreq(len(time), time[1]-time[0])
     freqarr /= 1e3    # [kHz]
@@ -209,12 +213,15 @@ def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=[0, 50]):
     return np.real(data_filtered)
 
 
-def remove_outliers(data, drange=[0, 1]):
+def remove_outliers(data, drange=None):
     ''' ----------------------------------------------------------------------
     Looks for outliers in the data and removes them
         data = array of dimensions (nt,nx,ny,nshot,nchan)
         drange = 2 element array, remove data that does not fall within range.
     '''
+    # Set default drange
+    if drange is None:
+        drange = [0, 1]
     # copy array so that original does not get overwritten
     temp = copy.copy(data)
     index = np.where((temp < drange[0]) | (temp > drange[1]))
@@ -335,7 +342,7 @@ def plot_fft(data, freqarr, frange=None, units='kHz', title='set title=',
     return temp
 
 
-def fft_peak_find(fftdata, freqarr, frange=[0, 1], plot=0):
+def fft_peak_find(fftdata, freqarr, frange=None, plot=0):
     ''' ----------------------------------------------------------------------
     Finds the most prominent peak frequency in the FFT by slicing.
         fftdata = The FFT spectra of the data
@@ -343,6 +350,10 @@ def fft_peak_find(fftdata, freqarr, frange=[0, 1], plot=0):
         frange  = Range of data to slice to find the peak
         plot    = (optional) Set to any value to disable plot
     '''
+    # Set default frange
+    if frange is None:
+        frange = [0, 1]
+
     ii = value_locate_arg(freqarr, frange[0])
     jj = value_locate_arg(freqarr, frange[1])
 

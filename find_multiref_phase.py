@@ -1,7 +1,7 @@
 '''
 NAME:           find_multiref_phase.py  (IDL:find_multiref_phase.pro)
 AUTHOR:         swjtang
-DATE:           15 Mar 2021
+DATE:           20 Apr 2021
 DESCRIPTION:    Finds the phase between signals to be used in conditional
                 averaging. Only for XY planes.
 INPUTS:         data = A formatted numpy array in order of (nt,nx,ny,nshots,
@@ -21,8 +21,12 @@ import lib.toolbox as tbx
 import lib.errorcheck as echk
 
 
-def correlate_multi_signals(data, lagarray, passarray, trange=[5000, 17500],
+def correlate_multi_signals(data, lagarray, passarray, trange=None,
                             filterflag=0):
+    # Set trange
+    if trange is None:
+        trange = [5000, 17500]
+
     nt, nx, ny, nshots, nchan = data.shape
     t1, t2 = echk.check_trange(nt, trange[0], trange[1])
 
@@ -53,8 +57,7 @@ def correlate_multi_signals(data, lagarray, passarray, trange=[5000, 17500],
     return(t1, t2, corr_arr)
 
 
-def find_multiref_phase(data, trange=None, ref=[0, 0, 0, 0],
-                        dbshot=[0, 1, 1, 0], **kwargs):
+def find_multiref_phase(data, trange=None, ref=None, dbshot=None, **kwargs):
     ''' ----------------------------------------------------------------------
     Function which determines the lag time of all other shots in the array
     with respect to a reference shot.
@@ -67,6 +70,13 @@ def find_multiref_phase(data, trange=None, ref=[0, 0, 0, 0],
                 dbshot = The index (ix, iy, ishot, ichan) used for debugging.
                 **kwargs gets passed into lagtime()
     '''
+    # Set default values for ref and dbshot
+    if ref is None:
+        ref = [0, 0, 0, 0]
+
+    if dbshot is None:
+        dbshot = [0, 1, 1, 0]
+
     nt, nx, ny, nshots, nchan = data.shape
     rx, ry, rs, rchan = ref[0], ref[1], ref[2], ref[3]
 
@@ -119,7 +129,6 @@ def find_multiref_phase(data, trange=None, ref=[0, 0, 0, 0],
     return lagarr, passarr
 
 
-# ----------------------------------------------------------------------------
 def lagtime(sig1, sig2, tmax=None, plot=0, threshold=0.6, quiet=0):
     '''
     OPTIONAL:   tmax      = The maximum number of pixels to search for the

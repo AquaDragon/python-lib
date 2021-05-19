@@ -1,7 +1,7 @@
 '''
 NAME:           fname_tds.pro
 AUTHOR:         swjtang
-DATE:           7 Apr 2021
+DATE:           16 May 2021
 DESCRIPTION:    Returns filenames of TDS .hdf5 files with a single call number
 INPUTS:         callnumber = the id of the file to be read
                 full       = (optional) returns the filename only if set to 0
@@ -438,6 +438,25 @@ def fname_tds(callnumber, full=1, old=0):
         735: [dir9, '35_fluxrope_120V_RFEA45_2point.hdf5'],
         736: [dir9, '36_fluxrope_120V_RFEA45_plane_600mV.hdf5'],
         # 735 - 736: continuation of 732, 733
+
+        # May 2021 B-dot run
+        741: [dir9, '41_fluxrope_Bmov35_Bfix25_line.hdf5'],
+        742: [dir9, '42_fluxrope_Bmov35_Bfix25_plane.hdf5'],
+        743: [dir9, '43_fluxrope_Bmov35_Bfix25_line.hdf5'],
+        744: [dir9, '44_fluxrope_Bmov43_Bfix25_line.hdf5'],
+        '745a': [dir9, '45_fluxrope_Bmov43_Bfix25_plane_1of6.hdf5'],
+        '745b': [dir9, '45_fluxrope_Bmov43_Bfix25_plane_2of6.hdf5'],
+        '745c': [dir9, '45_fluxrope_Bmov43_Bfix25_plane_3of6.hdf5'],
+        '745d': [dir9, '45_fluxrope_Bmov43_Bfix25_plane_4of6.hdf5'],
+        '745e': [dir9, '45_fluxrope_Bmov43_Bfix25_plane_5of6.hdf5'],
+        '745f': [dir9, '45_fluxrope_Bmov43_Bfix25_plane_6of6.hdf5'],
+        746: [dir9, '46_fluxrope_RFEA30.hdf5'],
+        747: [dir9, '47_fluxrope_RFEA30.hdf5'],
+        748: [dir9, '48_fluxrope_RFEA30_Bmov38_Bfix25.hdf5'],
+        '749a': [dir9, '49_fluxrope_RFEA30_Bfix38_Bmov25_1of2.hdf5'],
+        '749b': [dir9, '49_fluxrope_RFEA30_Bfix38_Bmov25_2of2.hdf5'],
+        750: [dir9, '50_fluxrope_RFEA30_Bfix38_Bmov19.hdf5'],
+        
 
         # --------------------------------------------------------------------
         #    OLD DATARUN (FluxRopes_2_14)

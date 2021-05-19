@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           20 Apr 2021
+DATE:           14 May 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -13,6 +13,7 @@ import copy
 from matplotlib import pyplot as plt
 import numpy as np
 import os
+import pickle
 from scipy.io.idl import readsav    # for read_IDL_sav
 import scipy.signal
 
@@ -21,8 +22,6 @@ import scipy.signal
                 VISUALIZATION
 -------------------------------------------------------------------------------
 '''
-
-
 def progress_bar(cur_arr, tot_arr, label=None, header=''):
     ''' ----------------------------------------------------------------------
     Prints a output/progress bar for jupyter.
@@ -102,31 +101,14 @@ def get_line_profile(x, y, data, axis='x', value=0):
                 FILTERING
 ------------------------------------------------------------------------------
 '''
+def filter_bint(*args, **kwargs):
+    # ALIAS FOR bdot.bint
+    return bdot.bint(*args, **kwargs)
 
 
-def filter_bint(data, dt=1, mrange=None, axis=0, quiet=0):
-    ''' ----------------------------------------------------------------------
-    A function used to integrate B-dot. Assumes first dimension is time.
-        (IDL: filter_bint.pro)
-    INPUTS:
-        data    = n-dimensional array containing data to be integrated
-    OPTIONAL:
-        dt      = Time between two adjacent data points
-        mrange  = 2-element array indicating start and stop indices of array
-                  to take the mean.
-    '''
-    qprint(quiet, 'Integrating B-dot data...', end=' ')
-    mean_val = np.mean(data, axis=axis)
-    if mrange is not None:
-        if len(mrange) == 2:
-            mean_val = np.mean(data[int(mrange[0]):int(mrange[1]), ...],
-                               axis=axis)
-    qprint(quiet, 'Mean complete, taking cumulative sum...')
-    bint_data = np.cumsum(data-mean_val, axis=axis)*dt
-    qprint(quiet, 'Done!')
-    # mean_val is broadcast into the dimensions of data, requiring the first
-    # dimension to be time or the trailing axes won't align.
-    return bint_data
+def bint(*args, **kwargs):
+    # ALIAS FOR bdot.bint
+    return bdot.bint(*args, **kwargs)
 
 
 def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=None):
@@ -249,10 +231,8 @@ def smooth(data, nwindow=351, polyn=2, **kwargs):
                 FFT ROUTINES
 ------------------------------------------------------------------------------
 '''
-
-
 def average_fft(data, time, dt=1, axis=0, avgflag=1):
-    ''' --------------------------------------------------------------------------
+    ''' -----------------------------------------------------------------------
     FFT then average over dimensions in a multi-dimensional dataset.
         (IDL: avgfft.pro)
         data = array of dimensions (nt,nx,ny,nshot,nchan)
@@ -371,8 +351,6 @@ def fft_peak_find(fftdata, freqarr, frange=None, plot=0):
                 MATH & CALCULATIONS
 ------------------------------------------------------------------------------
 '''
-
-
 def c_correlate(sig1, sig2):
     ''' ----------------------------------------------------------------------
     Calculates the NORMALIZED cross-correlation Pxy(L) as a function of lag L.
@@ -477,8 +455,6 @@ def check_save_filepath(save, file_type):
                 AUXILLARY FUNCTIONS
 ------------------------------------------------------------------------------
 '''
-
-
 def read_IDL_sav(fdir, fname):
     ''' ----------------------------------------------------------------------
     Reads IDL .sav files.
@@ -528,3 +504,145 @@ def savefig(*args, **kwargs):
     not get cropped.
     '''
     return plt.savefig(*args, **kwargs, bbox_inches='tight')
+
+
+
+class bdot:
+    ''' ----------------------------------------------------------------------
+        B-DOT PROBE ROUTINES
+    --------------------------------------------------------------------------
+    '''
+    def __init__(self):
+        pass
+
+    def bint(data, dt=1, mrange=None, axis=0, quiet=0):
+        ''' ------------------------------------------------------------------
+        A function used to integrate B-dot data. Assumes first dimension is
+        time. (IDL: filter_bint.pro)
+        INPUTS:
+            data    = n-dimensional array containing data to be integrated
+        OPTIONAL:
+            dt      = Time between two adjacent data points
+            mrange  = 2-element array indicating start and stop indices of
+                      array to take the mean.
+        '''
+        qprint(quiet, 'Integrating B-dot data...', end=' ')
+        mean_val = np.mean(data, axis=axis)
+        if mrange is not None:
+            if len(mrange) == 2:
+                mean_val = np.mean(data[int(mrange[0]):int(mrange[1]), ...],
+                                   axis=axis)
+        qprint(quiet, 'Mean complete, taking cumulative sum...')
+        bint_data = np.cumsum(data-mean_val, axis=axis)*dt
+        qprint(quiet, 'Done!')
+        # mean_val is broadcast into the dimensions of data, requiring the
+        # first dimension to be time or the trailing axes won't align.
+        return bint_data
+
+
+    def correct_probe_angle(x, y, dU, dV, dist=50):
+        ''' ------------------------------------------------------------------
+        Corrects a B-dot quiver plane for the angle which the probe makes from
+        ball valve
+        INPUTS:
+            x = Array of x-positions either 1D or same dimensions as data
+            y = Array of y-positions either 1D or same dimensions as data
+            dU = Array for quiver arrows in x direction
+            dV = Array for quiver arrows in y direction
+        OPTIONAL:
+            dist = [same units as x/y] length from center of machine to
+                  ball valve
+        '''
+        # Check x and y dimensions and if 1D convert to meshgrid
+        if (np.array(x).ndim == 1) & (np.array(y).ndim == 1):
+            xpos, ypos = np.meshgrid(x, y, indexing='ij')
+        else:
+            xpos, ypos = x, y
+
+        # Check dimensions of data
+        if (xpos.shape == dU.shape) and (ypos.shape == dV.shape):
+            angle = np.arctan(abs(ypos / (dist-xpos)))
+            data_U = dU*np.cos(angle) + dV*np.sin(angle)
+            data_V = -dU*np.sin(angle) + dV*np.cos(angle)
+            return data_U, data_V
+        else:
+            print('!!! shape of input arrays does not match data')
+            return None, None
+
+
+class mc:
+    ''' ----------------------------------------------------------------------
+        MONOCHROMETER ROUTINES
+    --------------------------------------------------------------------------
+    '''
+    def __init__():
+        pass
+
+    def pat_data_csv(wavelengths, bintimes, histogram, nshots=1, fname=None):
+        ''' ------------------------------------------------------------------
+        Pat's routine to bin monochrometer data and write to csv file.
+        INPUTS:
+            wavelengths = 1D array of wavelengths
+            bintimes    = 1D array of each bin's start time
+            histogram   = 2D array of histogram data (#wavelengths x #times)
+        OPTIONAL:
+            nshots = Total number of shots per wavelength step
+            fname  = Name of the savefile
+        '''
+        nlambda = wavelengths.shape[0]
+        nt = bintimes.shape[0]
+
+        if fname is None:
+            fname = '2021-05-12 6405.2(.05)6407.7 400shots portB 20u slits'\
+                    'coll above midplane'
+        save_arr = np.zeros((nlambda+1, nt))
+        save_arr[0, 0] = np.nan               # top left corner
+        save_arr[0, 1:] = bintimes[:-1]       # first row is times
+        save_arr[1:, 0] = wavelengths         # first column is wavelengths
+        save_arr[1:, 1:] = histogram/nshots   # rest of array is histogram data
+        csv_fn = fname+".csv"
+        np.savetxt(csv_fn, save_arr, delimiter=',')
+        print('wrote histograms to file "', csv_fn, '"', sep='')
+        print('  first row = times')
+        print('  first col = wavelengths')
+
+
+    def pat_unpickle_hist(fname=None, ttotal=20, tbin=100, nshots=200,
+                          nlambda=1):
+        ''' ------------------------------------------------------------------
+        Routine to unpickle the monochometer data written by Pat.
+        INPUTS:
+            fname   = Full filename + directory of the file
+            ttotal  = [ms] Total duration of a single shot
+            tbin    = Width of bin in pixels
+            nshots  = Number of shots per wavelength step
+            nlambda = Number of wavelength steps of the monochrometer
+        '''
+        pf = open(fname, "rb")    # pickle file
+        ii = 0
+        print('Unpickling the data...')
+        while True:
+            try:
+                header = pickle.load(pf)
+                ref = pickle.load(pf)
+
+                # Initialization step, have to read one line of data first
+                if ii == 0:
+                    nbins = int(ref.shape[0]/tbin)  # Total number of bins
+                    hist_arr = np.zeros((nlambda, nbins-1))  # Histogram
+                    hlist = np.linspace(0, ttotal, nbins)
+                    dt = ttotal/nbins
+
+                pt = pickle.load(pf)
+                py = pickle.load(pf)
+                
+                ## Changes way data is manipulated here
+                hist, _ = np.histogram(pt, bins=hlist)
+                hist_arr[ii//nshots] += hist
+
+                ii += 1
+            except EOFError:
+                break
+        print('Unpickling complete!')
+        pf.close()
+        return hlist, hist_arr, dt

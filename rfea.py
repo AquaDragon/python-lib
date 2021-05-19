@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           29 Apr 2021
+DATE:           13 May 2021
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -22,9 +22,10 @@ import lib.fname_tds as fn
 import lib.read_lapd_data as rd
 import lib.toolbox as tbx
 import lib.spikes as spike
+import lib.bdot as bdot
 
 
-class DataRFEA(object):
+class params(object):
     def __init__(self, fid, nsteps, nshots, res, ch_volt=0, ch_curr=3,
                  ch_bdot=None, ch_bint=None):
         self.fid = fid
@@ -57,6 +58,7 @@ class DataRFEA(object):
         self.t1, self.t2 = None, None    # [px] Area of interest
         self.bt1, self.bt2 = None, None  # [px] B-int bounds for Xcorrelation
 
+    # Set analysis times
     def set_time(self, t1=None, t2=None, bt1=None, bt2=None):
         if t1 is not None:
             self.t1 = t1
@@ -67,266 +69,280 @@ class DataRFEA(object):
         if bt2 is not None:
             self.bt2 = bt2
 
-    ''' ----------------------------------------------------------------------
-        GET DATA FUNCTIONS
-    --------------------------------------------------------------------------
-    '''
-    def get_volt(self, quiet=0):
-        print("** Running method: get_volt")
-        if self.ch_volt is not None:
-            dataset = rd.read_lapd_data(
-                self.fname, nsteps=self.nsteps, nshots=self.nshots,
-                rchan=[self.ch_volt], rshot=[1], quiet=quiet)
 
-            # dataset output is Arr[nt, shot, chan, step]
-            data = np.transpose(dataset['data'], (0, 3, 1, 2))
+''' ----------------------------------------------------------------------
+    GET DATA METHODS
+--------------------------------------------------------------------------
+'''
+class get():
+    def __init__(self, obj):
+        self.obj = obj
 
-            # x100 = (50x from voltmeter, x2 from 1M/50 Ohm digitizer mismatch)
-            self.volt = np.mean(data[10000:35000, :, 0, 0]*100, axis=0)
-        return self.volt
 
-    def get_dataset(self, quiet=0):
-        print("** Running method: get_dataset")
+    def volt(self, quiet=0, **kwargs):
         dataset = rd.read_lapd_data(
-            self.fname, nsteps=self.nsteps, nshots=self.nshots,
-            rchan=[self.ch_curr, self.ch_bdot], quiet=quiet)#, rshot=[0,1])
+            self.obj.fname, nsteps=self.obj.nsteps, nshots=self.obj.nshots,
+            rchan=[self.obj.ch_volt], rshot=[1], quiet=quiet, **kwargs)
+
+        # dataset output is Arr[nt, shot, chan, step]
+        data = np.transpose(dataset['data'], (0, 3, 1, 2))
+
+        # x100 = (50x from voltmeter, x2 from 1M/50 Ohm digitizer mismatch)
+        self.obj.volt = np.mean(data[10000:35000, :, 0, 0]*100, axis=0)
+        return self.obj.volt
+
+
+    def dataset(self, quiet=0, **kwargs):
+        dataset = rd.read_lapd_data(
+            self.obj.fname, nsteps=self.obj.nsteps, nshots=self.obj.nshots,
+            rchan=[self.obj.ch_curr, self.obj.ch_bdot], quiet=quiet, **kwargs)
 
         datatemp = dataset['data']
-        self.nt = datatemp.shape[0]
+        self.obj.nt = datatemp.shape[0]
         data = np.transpose(datatemp, (0, 3, 1, 2))
-        if self.ch_curr < self.ch_bdot:
+        if self.obj.ch_curr < self.obj.ch_bdot:
             curr = data[..., 0]
             bdot = data[..., 1]
         else:
             bdot = data[..., 0]
             curr = data[..., 1]
 
-        self.time = dataset['time']
-        self.dt = dataset['dt']
-        self.xpos = dataset['x']
-        self.ypos = dataset['y']
+        self.obj.time = dataset['time']
+        self.obj.dt = dataset['dt']
+        self.obj.xpos = dataset['x']
+        self.obj.ypos = dataset['y']
         return curr, bdot
 
-    def mean_current(self, curr):
-        return np.mean(curr, axis=2)/self.res * 1e6    # [uA]
-
-    def plot_IV(self, volt, curr, times=None):
-        if times is None:
-            times = [15000, 17500, 20000, 25000, 30000]
-
-        # IV response
-        tbx.prefig(xlabel='Peak pulse voltage [V]', ylabel='Current [$\mu$A]')
-        for tt in times:
-            plt.plot(volt, curr[tt, :], label='{0:.2f} ms'.format(
-                self.mstime(tt, start=5)))
-        plt.legend(fontsize=20)
-        plt.title('Average IV response, NO conditional averaging, {0} shots'.
-                  format(self.nshots), fontsize=20)
-        tbx.savefig('./img/{0}-average-IV-response.png'.format(self.fid))
-
-        # IV derivative
-        tbx.prefig(xlabel='Peak pulse voltage [V]', ylabel='-dI/dV')
-        for tt in times:
-            deriv = IVderiv(curr[tt, :], nwindow=51)
-            plt.plot(volt, deriv, label='{0:.2f} ms'.format(
-                self.mstime(tt, start=5)))
-        plt.legend(fontsize=20)
-        plt.title('Average IV-deriv, NO conditional averaging, {0} shots'.
-                  format(self.nshots), fontsize=20)
-        tbx.savefig('./img/{0}-average-IV-deriv.png'.format(self.fid))
-
-    ''' ----------------------------------------------------------------------
-        ION TEMPERATURE (Ti) MANIPULATION
-    --------------------------------------------------------------------------
+''' ----------------------------------------------------------------------
+    ION TEMPERATURE (Ti) MANIPULATION
+--------------------------------------------------------------------------
+'''
+def calc_Ti_arr(dclass, volt, curr, dt=1, ca=0, **kwargs):
+    ''' ---------------------------------------------------------
+    Calculate Ti and Vp from an array of RFEA IV curves
+    INPUTS:   volt = np.array of voltage data
+              curr = np.array of current data
+    OPTIONAL: dt   = Number of indices to skip
     '''
-    def calc_Ti_arr(self, volt, curr, dt=1, ca=0, **kwargs):
-        ''' ---------------------------------------------------------
-        Calculate Ti and Vp from an array of RFEA IV curves
-        INPUTS:   volt = np.array of voltage data
-                  curr = np.array of current data
-        OPTIONAL: dt   = Number of indices to skip
-        '''
-        if ca != 0:
-            t1, t2 = 0, curr.shape[0]
-            tarr = np.arange(t1, t2, dt)
-            self.tarr = np.arange(self.t1+t1, self.t1+t2, dt)
-        else:
-            t1 = self.t1 or 0
-            t2 = self.t2 or curr.shape[0]
-            tarr = np.arange(t1, t2, dt)
-            self.tarr = tarr
+    if ca != 0:
+        t1, t2 = 0, curr.shape[0]
+        tarr = np.arange(t1, t2, dt)
+        dclass.tarr = np.arange(dclass.t1+t1, dclass.t1+t2, dt)
+    else:
+        t1 = dclass.t1 or 0
+        t2 = dclass.t2 or curr.shape[0]
+        tarr = np.arange(t1, t2, dt)
+        dclass.tarr = tarr
 
-        ntarr = tarr.shape[0]
+    ntarr = tarr.shape[0]
 
-        # Define arrays
-        Ti = np.empty(ntarr)
-        Vp = np.empty(ntarr)
-        errTi = np.empty(ntarr)
+    # Define arrays
+    Ti = np.empty(ntarr)
+    Vp = np.empty(ntarr)
+    errTi = np.empty(ntarr)
 
-        for ii in range(ntarr):
-            tt = tarr[ii]
-            tbx.progress_bar([ii], [ntarr])
-            Vp[ii], Ti[ii], errTi[ii] = self.find_Ti_exp(
-                volt, curr[tt, :]/self.res, plot=0, save=0, **kwargs)
-        return Ti, Vp, errTi
+    for ii in range(ntarr):
+        tt = tarr[ii]
+        tbx.progress_bar([ii], [ntarr])
+        Vp[ii], Ti[ii], errTi[ii] = find_Ti_exp(
+            volt, curr[tt, :]/dclass.res, plot=0, save=0, **kwargs)
+    return Ti, Vp, errTi
 
-    def plot_TiVp(self, Ti, Vp, ca=0):
-        tt = np.array([self.mstime(tt) for tt in self.tarr])
+def plot_TiVp(dclass, Ti, Vp, ca=0):
+    tt = np.array([dclass.mstime(tt) for tt in dclass.tarr])
 
-        text = 'conditional average, exponential fit'
-        if ca == 1:
-            text = 'YES '+text
-            svname = 'yes-condavg'
-        else:
-            text = 'NO '+text
-            svname = 'no-condavg'
+    text = 'conditional average, exponential fit'
+    if ca == 1:
+        text = 'YES '+text
+        svname = 'yes-condavg'
+    else:
+        text = 'NO '+text
+        svname = 'no-condavg'
 
-        tbx.prefig(xlabel='time [ms]', ylabel='$T_i$ [eV]')
-        plt.title('{0} $T_i$ vs time, {1} (all times)'.format(self.fid,
-                  text), fontsize=25)
-        # plt.fill_between(tt, tbx.smooth(self.Ti-self.errTi, nwindow=51),
-        #     tbx.smooth(self.Ti+self.errTi, nwindow=51), alpha=0.2)
-        plt.plot(tt, tbx.smooth(Ti, nwindow=51))
-        tbx.savefig('./img/{0}-{1}-Ti-vs-time.png'.format(self.fid, svname))
+    tbx.prefig(xlabel='time [ms]', ylabel='$T_i$ [eV]')
+    plt.title('{0} $T_i$ vs time, {1} (all times)'.format(dclass.fid,
+              text), fontsize=25)
+    # plt.fill_between(tt, tbx.smooth(dclass.Ti-dclass.errTi, nwindow=51),
+    #     tbx.smooth(dclass.Ti+dclass.errTi, nwindow=51), alpha=0.2)
+    plt.plot(tt, tbx.smooth(Ti, nwindow=51))
+    tbx.savefig('./img/{0}-{1}-Ti-vs-time.png'.format(dclass.fid, svname))
 
-        tbx.prefig(xlabel='time [ms]', ylabel='$V_p$ [V]')
-        plt.title('{0} $V_p$ vs time, {1} (all times)'.format(self.fid,
-                  text), fontsize=25)
-        plt.plot(tt, Vp)
-        tbx.savefig('./img/{0}-{1}-Vp-vs-time.png'.format(self.fid, svname))
+    tbx.prefig(xlabel='time [ms]', ylabel='$V_p$ [V]')
+    plt.title('{0} $V_p$ vs time, {1} (all times)'.format(dclass.fid,
+              text), fontsize=25)
+    plt.plot(tt, Vp)
+    tbx.savefig('./img/{0}-{1}-Vp-vs-time.png'.format(dclass.fid, svname))
 
-    ''' ----------------------------------------------------------------------
-        B-DOT MANIPULATION
-    --------------------------------------------------------------------------
-    '''
-    def integrate_bdot(self, bdot, axis=0):
-        # Method to integrate the B-dot signal. Also checks if input is B-int.
-        if bdot is None:
-            print("** Running method: get_dataset...")
-            self.get_dataset(quiet=1)
+''' ----------------------------------------------------------------------
+    B-DOT MANIPULATION
+--------------------------------------------------------------------------
+'''
+def integrate_bdot(dclass, bdot, axis=0):
+    # Method to integrate the B-dot signal. Also checks if input is B-int.
+    if bdot is None:
+        print("** Running method: get_dataset...")
+        dclass.get_dataset(quiet=1)
 
-        if self.f_bint == 1:
-            print("** Input B-data is already integrated. Saving bint...")
-            bint = bdot
-        else:
-            bint = tbx.filter_bint(bdot, axis=axis)
-        return bint
+    if dclass.f_bint == 1:
+        print("** Input B-data is already integrated. Saving bint...")
+        bint = bdot
+    else:
+        bint = tbx.bint(bdot, axis=axis)
+    return bint
 
-    def plot_bint_range(self, bint, step=0, shot=0):
-        # Plot function to show the bounded region of integrated B used for
-        # conditional averaging
-        # INPUTS: bdata = 1D data array
-        if bint is None:
-            print("** Running method: integrate_bdot...")
-            self.integrate_bdot()
+def plot_bint_range(dclass, bint, step=0, shot=0):
+    # Plot function to show the bounded region of integrated B used for
+    # conditional averaging
+    # INPUTS: bdata = 1D data array
+    if bint is None:
+        print("** Running method: integrate_bdot...")
+        dclass.integrate_bdot()
 
-        bdata = bint[:, step, shot]
+    bdata = bint[:, step, shot]
 
-        tbx.prefig(xlabel='time [px]', ylabel='B-int')
-        plt.plot(bdata)
-        bt1 = self.bt1 or 0
-        bt2 = self.bt2 or len(bdata)
+    tbx.prefig(xlabel='time [px]', ylabel='B-int')
+    plt.plot(bdata)
+    bt1 = dclass.bt1 or 0
+    bt2 = dclass.bt2 or len(bdata)
 
-        plt.plot([bt1, bt1], [np.min(bdata), np.max(bdata)], 'orange')
-        plt.plot([bt2, bt2], [np.min(bdata), np.max(bdata)], 'orange')
-        plt.title('integrated B, step={0}, shot={1}'.format(step, shot),
-                  fontsize=20)
-        tbx.savefig('./img/{0}-condavg-range.png'.format(self.fid))
+    plt.plot([bt1, bt1], [np.min(bdata), np.max(bdata)], 'orange')
+    plt.plot([bt2, bt2], [np.min(bdata), np.max(bdata)], 'orange')
+    plt.title('integrated B, step={0}, shot={1}'.format(step, shot),
+              fontsize=20)
+    tbx.savefig('./img/{0}-condavg-range.png'.format(dclass.fid))
 
-    def plot_bint_shift(self, bint, curr=None, step=0, shot=0):
-        # Plots the reference bint/current with a test shot
-        bref = bint[self.bt1:self.bt2, 0, 0]
-        bdata = bint[self.bt1:self.bt2, step, shot]
-        xlag = fmp.lagtime(bref, bdata)['xlag']
-        if xlag is not None:
+def plot_bint_shift(dclass, bint, curr=None, step=0, shot=0):
+    # Plots the reference bint/current with a test shot
+    bref = bint[dclass.bt1:dclass.bt2, 0, 0]
+    bdata = bint[dclass.bt1:dclass.bt2, step, shot]
+    xlag = fmp.lagtime(bref, bdata)['xlag']
+    if xlag is not None:
+        tbx.prefig()
+        plt.title('integrated B signals', fontsize=25)
+        plt.plot(bref, label='reference')
+        plt.plot(bdata, label='original')
+        plt.plot(np.roll(bdata, -xlag), label='shift')
+        plt.legend(fontsize=20)
+
+        if curr is not None:
+            curr0 = dclass.curr[dclass.bt1:dclass.bt2, 0, 0]
+            curr1 = dclass.curr[dclass.bt1:dclass.bt2, step, shot]
             tbx.prefig()
-            plt.title('integrated B signals', fontsize=25)
-            plt.plot(bref, label='reference')
-            plt.plot(bdata, label='original')
-            plt.plot(np.roll(bdata, -xlag), label='shift')
+            plt.title('current signals', fontsize=25)
+            plt.plot(curr0, label='reference')
+            plt.plot(np.roll(curr1, -xlag), label='shift')
             plt.legend(fontsize=20)
+        else:
+            print("** curr = None, current not plotted")
 
-            if curr is not None:
-                curr0 = self.curr[self.bt1:self.bt2, 0, 0]
-                curr1 = self.curr[self.bt1:self.bt2, step, shot]
-                tbx.prefig()
-                plt.title('current signals', fontsize=25)
-                plt.plot(curr0, label='reference')
-                plt.plot(np.roll(curr1, -xlag), label='shift')
-                plt.legend(fontsize=20)
+''' ----------------------------------------------------------------------
+    CONDITIONAL AVERAGING ROUTINE
+--------------------------------------------------------------------------
+'''
+def condavg(dclass, bint, curr, bref=None, ref=None):
+    ''' ------------------------------------------------------------------
+    Conditionally avarage shift of RFEA current data.
+    INPUTS:   data    = np.array with the data to be conditionally
+                         averaged.
+              bdata   = np.array with the phase information (usually bdot)
+              nsteps  = Number of steps in the voltage sweep
+              nshots  = Number of shots for each step in the voltage sweep
+              trange  = Time range to store conditionally averaged data.
+              btrange = Time range of the conditional averaging (bdot)
+    OPTIONAL: ref = [step, shot] number of the reference shot
+              bref = Inputs a reference shot for conditional averaging
+    '''
+    # Set default values
+    if (dclass.t1 is None) and (dclass.t2 is None):
+        dclass.t1, dclass.t2 = 0, curr.shape[0]
+        print("** condavg t1, t2 undefined, setting defaults t1, t2 = {0},"
+              " {1}". format(dclass.t1, dclass.t2))
+    if (dclass.bt1 is None) and (dclass.bt2 is None):
+        dclass.bt1, dclass.bt2 = dclass.t1, dclass.t2
+        print("** condavg bt1, bt2 undefined, setting defaults bt1, bt2 ="
+              " {0}, {1}". format(dclass.bt1, dclass.bt2))
+    if ref is None:
+        ref = [0, 0]
+
+    # Current array, shifted in phase
+    curr_arr = np.zeros((dclass.t2-dclass.t1, dclass.nsteps, dclass.nshots))
+    # Array shows number of shots skipped because cross-correlation fails
+    skip_arr = np.zeros(dclass.nsteps)
+
+    # Determine the reference shot in bdata
+    if bref is None:
+        bref = bint[dclass.bt1:dclass.bt2, ref[0], ref[1]]
+
+    for step in range(dclass.nsteps):
+        skips = 0
+        for shot in range(dclass.nshots):
+            tbx.progress_bar([step, shot], [dclass.nsteps, dclass.nshots],
+                             ['nsteps', 'nshots'])
+            bsig = bint[dclass.bt1:dclass.bt2, step, shot]
+            xlag = fmp.lagtime(bref, bsig, quiet=1, threshold=0.8)['xlag']
+
+            if xlag is not None:
+                curr_arr[:, step, shot] = np.roll(curr[dclass.t1:dclass.t2,
+                                                  step, shot], -xlag)
             else:
-                print("** curr = None, current not plotted")
+                skips += 1
+        skip_arr[step] = skips
 
-    ''' ----------------------------------------------------------------------
-        CONDITIONAL AVERAGING ROUTINE
-    --------------------------------------------------------------------------
-    '''
-    def condavg(self, bint, curr, bref=None, ref=None):
-        ''' ------------------------------------------------------------------
-        Conditionally avarage shift of RFEA current data.
-        INPUTS:   data    = np.array with the data to be conditionally
-                             averaged.
-                  bdata   = np.array with the phase information (usually bdot)
-                  nsteps  = Number of steps in the voltage sweep
-                  nshots  = Number of shots for each step in the voltage sweep
-                  trange  = Time range to store conditionally averaged data.
-                  btrange = Time range of the conditional averaging (bdot)
-        OPTIONAL: ref = [step, shot] number of the reference shot
-                  bref = Inputs a reference shot for conditional averaging
-        '''
-        # Set default values
-        if (self.t1 is None) and (self.t2 is None):
-            self.t1, self.t2 = 0, curr.shape[0]
-            print("** condavg t1, t2 undefined, setting defaults t1, t2 = {0},"
-                  " {1}". format(self.t1, self.t2))
-        if (self.bt1 is None) and (self.bt2 is None):
-            self.bt1, self.bt2 = self.t1, self.t2
-            print("** condavg bt1, bt2 undefined, setting defaults bt1, bt2 ="
-                  " {0}, {1}". format(self.bt1, self.bt2))
-        if ref is None:
-            ref = [0, 0]
+    # Calculates factor so that mean_curr takes mean of shots not skipped
+    factor = [dclass.nshots/(dclass.nshots - ii) for ii in skip_arr]
+    mean_condavg_curr = np.mean(curr_arr, axis=2) * factor
 
-        # Current array, shifted in phase
-        curr_arr = np.zeros((self.t2-self.t1, self.nsteps, self.nshots))
-        # Array shows number of shots skipped because cross-correlation fails
-        skip_arr = np.zeros(self.nsteps)
+    return mean_condavg_curr, skip_arr, bref
 
-        # Determine the reference shot in bdata
-        if bref is None:
-            bref = bint[self.bt1:self.bt2, ref[0], ref[1]]
-
-        for step in range(self.nsteps):
-            skips = 0
-            for shot in range(self.nshots):
-                tbx.progress_bar([step, shot], [self.nsteps, self.nshots],
-                                 ['nsteps', 'nshots'])
-                bsig = bint[self.bt1:self.bt2, step, shot]
-                xlag = fmp.lagtime(bref, bsig, quiet=1, threshold=0.8)['xlag']
-
-                if xlag is not None:
-                    curr_arr[:, step, shot] = np.roll(curr[self.t1:self.t2,
-                                                      step, shot], -xlag)
-                else:
-                    skips += 1
-            skip_arr[step] = skips
-
-        # Calculates factor so that mean_curr takes mean of shots not skipped
-        factor = [self.nshots/(self.nshots - ii) for ii in skip_arr]
-        mean_condavg_curr = np.mean(curr_arr, axis=2) * factor
-
-        return mean_condavg_curr, skip_arr, bref
-
-    ''' ----------------------------------------------------------------------
-        GENERAL DATA ANALYSIS FUNCTIONS
-    --------------------------------------------------------------------------
-    '''
-    def mstime(self, ind, start=5, off=0):
-        # Determines the actual time (in ms) from the start of the discharge
-        # start: [ms] the start time of the trigger (recorded)
-        # off:   [px] the offset of the analyzed slice of data
-        return self.time[int(ind)+off]*1e3 + start
+''' ----------------------------------------------------------------------
+    GENERAL DATA ANALYSIS FUNCTIONS
+--------------------------------------------------------------------------
+'''
+def mstime(dclass, ind, start=5, off=0):
+    # Determines the actual time (in ms) from the start of the discharge
+    # start: [ms] the start time of the trigger (recorded)
+    # off:   [px] the offset of the analyzed slice of data
+    return dclass.time[int(ind)+off]*1e3 + start
 
 
+
+
+
+def mean_current(dclass, curr):
+    return np.mean(curr, axis=2)/dclass.res * 1e6    # [uA]
+
+
+def plot_IV(dclass, volt, curr, times=None):
+    if times is None:
+        times = [15000, 17500, 20000, 25000, 30000]
+
+    # IV response
+    tbx.prefig(xlabel='Peak pulse voltage [V]', ylabel='Current [$\mu$A]')
+    for tt in times:
+        plt.plot(volt, curr[tt, :], label='{0:.2f} ms'.format(
+            dclass.mstime(tt, start=5)))
+    plt.legend(fontsize=20)
+    plt.title('Average IV response, NO conditional averaging, {0} shots'.
+              format(dclass.nshots), fontsize=20)
+    tbx.savefig('./img/{0}-average-IV-response.png'.format(dclass.fid))
+
+    # IV derivative
+    tbx.prefig(xlabel='Peak pulse voltage [V]', ylabel='-dI/dV')
+    for tt in times:
+        deriv = IVderiv(curr[tt, :], nwindow=51)
+        plt.plot(volt, deriv, label='{0:.2f} ms'.format(
+            dclass.mstime(tt, start=5)))
+    plt.legend(fontsize=20)
+    plt.title('Average IV-deriv, NO conditional averaging, {0} shots'.
+              format(dclass.nshots), fontsize=20)
+    tbx.savefig('./img/{0}-average-IV-deriv.png'.format(dclass.fid))
+
+
+
+''' ----------------------------------------------------------------------
+    REGULAR NON-CLASS FUNCTIONS
+--------------------------------------------------------------------------
+'''
 def IVderiv(curr, scale=1, nwindow=51, nwindow2=None, polyn=3, **kwargs):
     # Calculates the current derivative -dI/dV
     smoo1 = tbx.smooth(curr, nwindow=nwindow, polyn=polyn, **kwargs)
@@ -497,3 +513,75 @@ def fname_gen(series, date='2021-01-28', folder='/data/swjtang/RFEA/',
               ch=2):
     # Plots the current derivative -dI/dV
     return '{0}{1}/C{2}{3}.txt'.format(folder, date, ch, series)
+
+
+''' ----------------------------------------------------------------------
+    DISTRIBUTION FUNCTIONS & SMOOTHING
+--------------------------------------------------------------------------
+'''
+def rsmooth(data, repeat=2, nwindow=31, **kwargs):
+    temp = data
+    while repeat>0:
+        temp = tbx.smooth(temp, nwindow=nwindow, **kwargs)
+        repeat -= 1
+    return temp
+
+
+def sgsmooth(data, nwindow=31, repeat=5):
+    # Savitzky-Golay smoothing
+    # returns (1) appropriately formatted x-values, (2) smoothed data,
+    # (3) gradient
+    xval = np.arange(len(data))
+    x = xval[int(nwindow/2):-int(nwindow/2)]
+    
+    y = rsmooth(data, repeat=repeat, nwindow=nwindow)[int(
+            nwindow/2):-int(nwindow/2)]
+    
+    grad_y = -np.gradient(y)
+
+    return x, y, grad_y
+
+
+def exv2(volt, data, **kwargs):
+    # Expectation value of v^2 divide by density expectation value 
+    try:
+        nwindow = kwargs.nwindow
+    except:
+        nwindow = 31    # default value of nwindow in rsmooth
+
+    grad = -np.gradient(rsmooth(data, **kwargs))
+
+    # Cut -dI/dV at the peak then symmetrize
+    arg = np.argmax(grad[nwindow:-nwindow]) + nwindow
+    cut = np.array(grad[arg:-nwindow])
+
+    arrE = volt[arg:]-volt[arg]
+
+    den = np.sum([jj/np.sqrt(ii) for ii, jj in zip(arrE, cut) if ii != 0])
+    vavg = np.sum([jj*np.sqrt(ii) for ii, jj in zip(arrE, cut) if ii != 0])
+    
+    return vavg/den
+
+
+def dfunc(dataL, dataR, nwindow=31, order=20):
+    # Create distribution function using two data arrays.
+    # Find max, cut the curve, do it for the other side, then join them
+    # at the top. Normalize to the mag of one side. Inputs are IV traces.
+    xL, yL, gradL = sgsmooth(dataL, nwindow=nwindow, repeat=order)
+    xR, yR, gradR = sgsmooth(dataR, nwindow=nwindow, repeat=order)
+    # gradL = -np.gradient(nsmooth(dataL, n=order, nwindow=nwindow))
+    # gradR = -np.gradient(nsmooth(dataR, n=order, nwindow=nwindow))
+
+    # Find the max
+    argL = np.argmax(gradL[nwindow:-nwindow]) + nwindow
+    argR = np.argmax(gradR[nwindow:-nwindow]) + nwindow
+
+    # Slice curves and only keep the right side
+    sliceL = np.array(gradL[argL:-nwindow])
+    sliceR = np.array(gradR[argR:-nwindow])
+
+    # Normalize wrt right side of the curve
+    factor = gradR[argR] / gradL[argL]
+    index = np.arange(-len(sliceL),len(sliceR))
+
+    return index, np.concatenate([np.flip(sliceL)*factor, sliceR])

@@ -1,7 +1,7 @@
 '''
 NAME:           find_multiref_phase.py  (IDL:find_multiref_phase.pro)
 AUTHOR:         swjtang
-DATE:           20 Apr 2021
+DATE:           13 May 2021
 DESCRIPTION:    Finds the phase between signals to be used in conditional
                 averaging. Only for XY planes.
 INPUTS:         data = A formatted numpy array in order of (nt,nx,ny,nshots,
@@ -54,7 +54,7 @@ def correlate_multi_signals(data, lagarray, passarray, trange=None,
                 ii += 1
         if ii != 0:
             corr_arr[:, xx, yy, ichan] = temp/ii
-    return(t1, t2, corr_arr)
+    return t1, t2, corr_arr
 
 
 def find_multiref_phase(data, trange=None, ref=None, dbshot=None, **kwargs):
@@ -67,18 +67,26 @@ def find_multiref_phase(data, trange=None, ref=None, dbshot=None, **kwargs):
                          Computationally intensive, so set reasonable values.
                 ref    = The index (ix, iy, ishot) of the reference shot. If
                          unspecified, use the 1st shot of the entire dataset.
+                         Do not have to specify channel as the shots will be
+                         matched to the ref from the same channel.
                 dbshot = The index (ix, iy, ishot, ichan) used for debugging.
                 **kwargs gets passed into lagtime()
     '''
     # Set default values for ref and dbshot
     if ref is None:
-        ref = [0, 0, 0, 0]
+        ref = [0, 0, 0]
 
     if dbshot is None:
         dbshot = [0, 1, 1, 0]
 
-    nt, nx, ny, nshots, nchan = data.shape
-    rx, ry, rs, rchan = ref[0], ref[1], ref[2], ref[3]
+    # Determine data dimensions
+    if len(data.shape) == 5:
+        nt, nx, ny, nshots, nchan = data.shape
+    elif len(data.shape) == 4:
+        nt, nx, ny, nshots = data.shape
+        nchan = 1
+
+    rx, ry, rs = ref[0], ref[1], ref[2]
 
     # Error checking ---------------------------------------------------------
     if (trange is None) or (len(trange) != 2):
@@ -108,7 +116,7 @@ def find_multiref_phase(data, trange=None, ref=None, dbshot=None, **kwargs):
                 passarr[xx, yy, ss, ichan] = 1
 
     else:
-        ref = data[t1:t2, rx, ry, rs, rchan]
+        ref = data[t1:t2, rx, ry, rs, 0]
         sig = data[t1:t2, dbshot[0], dbshot[1], dbshot[2], dbshot[3]]
         temp = lagtime(ref, sig, **kwargs)
         return 0, 0

@@ -1,7 +1,7 @@
 '''
 NAME:           find_multiref_phase.py  (IDL:find_multiref_phase.pro)
 AUTHOR:         swjtang
-DATE:           13 May 2021
+DATE:           18 May 2021
 DESCRIPTION:    Finds the phase between signals to be used in conditional
                 averaging. Only for XY planes.
 INPUTS:         data = A formatted numpy array in order of (nt,nx,ny,nshots,
@@ -129,12 +129,18 @@ def find_multiref_phase(data, trange=None, ref=None, dbshot=None, **kwargs):
     plt.legend(['Reference signal', 'Last signal in data'])
 
     # rejection percentage
-    p_reject = (passarr == 1).sum() / passarr.size
-    print('Shot rejection rate = {0:.2f}%'.format(p_reject*100))
+    p_reject = reject_rate(passarr)
     if p_reject > 0.5:
         print('Reference shot is lousy! Choose another one.')
 
     return lagarr, passarr
+
+
+def reject_rate(passarr, quiet=1):
+    # Calculates the shot rejection rate using the pass array
+    p_reject = (passarr == 1).sum() / passarr.size
+    tbx.qprint(quiet, 'Shot rejection rate = {0:.2f}%'.format(p_reject*100))
+    return p_reject
 
 
 def lagtime(sig1, sig2, tmax=None, plot=0, threshold=0.6, quiet=0):

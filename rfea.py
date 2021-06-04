@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           21 May 2021
+DATE:           02 Jun 2021
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -319,7 +319,7 @@ class data():
     --------------------------------------------------------------------------
     '''
     def mstime(self, *args, **kwargs):
-        trigtime(self.obj.time, *args, **kwargs)
+        return trigtime(self.obj.time, *args, **kwargs)
 
     def mean_current(self, curr):
         return np.mean(curr, axis=2)/self.obj.res * 1e6    # [uA]
@@ -332,7 +332,7 @@ class data():
         tbx.prefig(xlabel='Peak pulse voltage [V]', ylabel='Current [$\mu$A]')
         for tt in times:
             plt.plot(volt, curr[tt, :], label='{0:.2f} ms'.format(
-                self.mstime(tt, start=5)))
+                     self.mstime(tt, start=5)))
         plt.legend(fontsize=20)
         plt.title('Average IV response, NO conditional averaging, {0} shots'.
                   format(self.obj.nshots), fontsize=20)
@@ -460,7 +460,7 @@ class dfunc_movie():
 
         anim = animation.FuncAnimation(fig, generate_frame,
                                        frames=self.nframes, interval=25)
-        anim.save('./videos/{0}-dfunc-indiv.mp4'.format(self.fid))
+        anim.save('./videos/{0}-dfunc-combine.mp4'.format(self.fid))
 
     # Calculate Ti using the energy integral
     def calc_enit(self, dt=1):
@@ -773,3 +773,18 @@ def dfunc(dataL, dataR, voltL=None, voltR=None, nwindow=31, nwindowR=None,
     index = np.arange(-len(sliceL), len(sliceR))
 
     return index, np.concatenate([np.flip(sliceL)*factor, sliceR]), revolt
+
+
+def get_dfunc(cacurr, snw=41, passes=3):
+    nt, nvolt = cacurr.shape
+    nvolt -= 2*(snw//2)
+
+    cacurr_sm = np.empty((nt,nvolt))
+    grad_sm = np.empty((nt,nvolt))
+    
+    for tt in range(nt):
+        tbx.progress_bar(tt, nt, label='tt')
+        x, y, grad = sgsmooth(cacurr[tt,:], nwindow=snw, repeat=passes)
+        cacurr_sm[tt,:] = y
+        grad_sm[tt,:] = grad
+    return x, cacurr_sm, grad_sm

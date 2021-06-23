@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           21 May 2021
+DATE:           04 Jun 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -382,6 +382,20 @@ def value_locate_arg(array, value):
     return idx
 
 
+def curl(Bx, By, x, y):
+    ''' -------------------------------------------------------------------
+    Curl of two vectors, Bx, By does not have to be B-field
+        Bx = 2D array of vector x-values
+        By = 2D array of vector y-values
+        x = 1D array of x positions
+        y = 1D array of y positions
+    ----------------------------------------------------------------------
+    '''
+    dxBy = np.gradient(By, x, axis=0)
+    dyBx = np.gradient(Bx, y, axis=1)
+    return dxBy - dyBx
+
+
 def rungeKutta(x0, y0, x, h):
     ''' ----------------------------------------------------------------------
     4th order Runge-Kutta. Finds value of y for a given x using step size h
@@ -525,6 +539,7 @@ class bdot:
             dt      = Time between two adjacent data points
             mrange  = 2-element array indicating start and stop indices of
                       array to take the mean.
+        ----------------------------------------------------------------------
         '''
         qprint(quiet, 'Integrating B-dot data...', end=' ')
         mean_val = np.mean(data, axis=axis)
@@ -540,9 +555,9 @@ class bdot:
         return bint_data
 
 
-    def correct_probe_angle(x, y, dU, dV, dist=50):
+    def correct_angle(x, y, dU, dV, dist=50):
         ''' ------------------------------------------------------------------
-        Corrects a B-dot quiver plane for the angle which the probe makes from
+        Corrects a B-dot quiver plane for the angle between the probe and the
         ball valve
         INPUTS:
             x = Array of x-positions either 1D or same dimensions as data
@@ -552,6 +567,7 @@ class bdot:
         OPTIONAL:
             dist = [same units as x/y] length from center of machine to
                   ball valve
+        ----------------------------------------------------------------------
         '''
         # Check x and y dimensions and if 1D convert to meshgrid
         if (np.array(x).ndim == 1) & (np.array(y).ndim == 1):
@@ -568,5 +584,4 @@ class bdot:
         else:
             print('!!! shape of input arrays does not match data')
             return None, None
-
 

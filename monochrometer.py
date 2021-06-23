@@ -1,7 +1,7 @@
 '''
 NAME:           monochrometer.py
 AUTHOR:         swjtang
-DATE:           01 Jun 2021
+DATE:           04 Jun 2021
 DESCRIPTION:    A toolbox of functions related to the monochrometer / 
                 spectrometer.
 ----------------------------------------------------------------------------
@@ -110,6 +110,7 @@ class pat():
 
 
 class histogram():
+    # Routines to perform histogram binning of data.
     def __init__(self):
         pass
 
@@ -149,6 +150,7 @@ class histogram():
 
 
 class cfit():
+    # Routines to curve fit a double-peaked gaussian to the spectral lines.
     def __init__(self):
         pass
 
@@ -206,6 +208,7 @@ class cfit():
 
 
 class plot():
+    # Plotting routines
     def __init__(self):
         pass
 
@@ -255,6 +258,7 @@ class plot():
 
 
 class wavelength():
+    # Output wavelength vector
     def __init__(self):
         pass
 
@@ -267,14 +271,24 @@ class wavelength():
 class angle():
     # Calculate volume observed by the optics
     def __init__(self):
+        # # Experimental data obtained from optics experiment on 2021-06-01
+        # X = np.array([31, 49, 59, 71]).reshape((-1, 1))
+        # yct = np.array([3.25, 4.21, 5.46, 5.90])
+        # ycb = np.array([-4.50, -5.38, -5.63, -6.23])
+        # ybt = np.array([2.92, 3.54, 4.38, 5.38])
+        # ybb = np.array([-3.54, -4.50, -4.75, -5.38])
+
+        # # calculate the coefficients of Y = mX + c
+        # self.b0ct, self.b1ct = self.linreg(X, yct)
+        # self.b0cb, self.b1cb = self.linreg(X, ycb)
+        # self.b0bt, self.b1bt = self.linreg(X, ybt)
+        # self.b0bb, self.b1bb = self.linreg(X, ybb)
         pass
 
     def linreg(X, y):
         reg = LinearRegression().fit(X, y)
         r2 = reg.score(X, y)
-        #print('R^2 = {0}'.format(r2))
 
         b0 = reg.intercept_
         b1 = reg.coef_
-        #print(b0, b1)
         return b0, b1, r2

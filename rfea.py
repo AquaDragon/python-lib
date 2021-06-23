@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           02 Jun 2021
+DATE:           22 Jun 2021
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -351,10 +351,163 @@ class data():
 
 
 ''' --------------------------------------------------------------------------
-    CREATE JOINT DISTRIBUTION FUNCTION MOVIE
+    SINGLE DISTRIBUTION FUNCTION ANALYSIS
 ------------------------------------------------------------------------------
 '''
-class dfunc_movie():
+class dfunc():
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+        # Stored values
+        self.rms = 0
+        self.guess = None
+        self.bounds = None
+
+    # Define fit functions ---------------------------------------------------
+    @staticmethod
+    def onegauss_func(x, x1, a1, b1, x2, a2, b2, c):
+        return a1 * np.exp(-((x-x1)/b1)**2) + c
+
+    @staticmethod
+    def twogauss_func(x, x1, a1, b1, x2, a2, b2, c):
+        return a1 * np.exp(-((x-x1)/b1)**2) +\
+               a2 * np.exp(-((x-x2)/b2)**2) + c
+
+    @staticmethod
+    def gauss(x, x1, a1, b1, c):
+        return a1* np.exp(-((x-x1)/b1)**2) + c
+
+
+    # Calculate the max noise value
+    def update_rms(self, xrange=None):
+        if xrange is None:
+            xrange=[43, 95]
+        ind = np.where((self.x < xrange[0]) | (self.x > xrange[1]))
+        self.rms = np.amax(self.y[ind]) 
+        return self.rms
+
+
+    # Set default values if no input is specified ----------------------------
+    # Array is for gaussfit (x1, a1, b1, x2, a2, b2, c)
+    def set_guess(self):
+        a1 = np.amax(self.y)
+        argb1 = np.argwhere(self.y > np.amax(self.y)/2)
+        b1 = (self.x[argb1[-1]]-self.x[argb1[0]])/(2*np.sqrt(2*np.log(2)))
+        a2 = self.update_rms()    # this is self.rms
+
+        guess = [60, a1, b1, 80, a2, 1, 0]    # checkpoint
+
+        # Find peaks and replace if they are found
+        peaks, _ = scipy.signal.find_peaks(self.y, height=1.5*a2, 
+                                           distance=20, prominence=a2)
+        if len(peaks) > 0:
+            guess[0] = self.x[peaks[0]]
+        if len(peaks) > 1:
+            guess[3] = self.x[peaks[1]]
+        return guess
+
+
+    def set_bounds(self):
+        _ = self.update_rms()
+        return [(50, self.rms, 0, 50, self.rms, 0, -0.5),
+                (90, 1.1*np.amax(self.y), 10,
+                 90, 1.1*np.amax(self.y), 10, 0.05)]
+
+
+    # Fitting function for distribution function -----------------------------
+    def gaussfit(self, guess=None, bounds=None, onegauss=None, **kwargs):
+        # Set default guess and boundaries
+        if guess is None:
+            guess = self.set_guess()
+        if bounds is None:
+            bounds = self.set_bounds()
+
+        if onegauss is None:
+            fitfunc = self.twogauss_func
+        else:
+            fitfunc = self.onegauss_func
+
+        try:
+            popt, _ = scipy.optimize.curve_fit(fitfunc, self.x, self.y,
+                                               p0=guess, bounds=bounds)
+            # Calculate least squares for error
+            arg = np.argwhere(self.y > self.rms)
+            lsq = np.sum((self.y[arg] - fitfunc(self.x[arg], *popt))**2)
+            return popt, lsq
+        except (RuntimeError, ValueError):
+            return None, None
+
+
+    # Plot components of the distribution function ---------------------------
+    def dfplot(self, x, y, popt, lsq, fitfunc, color='red', window=None,
+               **kwargs):
+        if fitfunc is self.twogauss_func:
+            wlabel = 'LSQ = {0:.4f}, '\
+                     'x1={1:.2f}, A1={2:.2f}, b1={3:.2f}, '\
+                     'x2={4:.2f}, A2={5:.2f}, b2={6:.2f}, '\
+                     'c={7:.2f}'.format(lsq, *popt)
+            # A2
+            window.plot(x, self.gauss(x, popt[3], popt[4], popt[5], popt[6]),
+                        color=color, alpha=0.3) 
+        else:
+            wlabel = 'LSQ = {0:.4f}, '\
+                     'x1={1:.2f}, A1={2:.2f}, b1={3:.2f}, '\
+                     'c={7:.2f}'.format(lsq, *popt)
+
+        window.plot(x, fitfunc(x, *popt), label=wlabel, color=color)
+        # A1
+        window.plot(x, self.gauss(x, popt[0], popt[1], popt[2], popt[6]),
+                    color=color, alpha=0.3)
+
+
+    # Multiple function analysis. Plot best curve from least squares. --------
+    def bestfit(self, window=None, rec_guess=None):
+        # rec_guess = A guess value to be passed to check for better guesses
+        popt1, lsq1 = self.gaussfit()
+        popt2, lsq2 = self.gaussfit(guess=rec_guess)
+        popt3, lsq3 = self.gaussfit(onegauss=1)
+
+        window.plot([self.x[0], self.x[-1]], [1.5*self.rms, 1.5*self.rms], '--')
+
+        def check_reject(popt):
+            # [x1, a1, b1, x2, a2, b2, c]
+            closeness = abs(popt[0]-popt[3])/((popt[0]+popt[3])/2)
+            if (closeness < 0.1) or (popt[1] < 1.5*self.rms) or \
+               (popt[4] < 1.5*self.rms):
+                return 1
+            else:
+                return None
+
+        popt, lsq = None, 1e6
+        if lsq1 is not None:
+            if (lsq1 <= lsq) & (check_reject(popt1) is None):
+                popt, lsq = popt1, lsq1
+                color = 'red'
+                fitfunc = self.twogauss_func
+        if lsq2 is not None:
+            if (lsq2 <= lsq) & (check_reject(popt2) is None):
+                popt, lsq = popt2, lsq2
+                color = 'blue'
+                fitfunc = self.twogauss_func
+        if lsq3 is not None:
+            if (lsq3 <= lsq):
+                color = 'green'
+                popt, lsq = popt3, lsq3
+                fitfunc = self.onegauss_func
+
+        if popt is not None:
+            self.dfplot(self.x, self.y, popt, lsq, fitfunc, window=window,
+                        color=color)
+
+        return popt    # guess will handle None values
+
+
+''' --------------------------------------------------------------------------
+    JOINT DISTRIBUTION FUNCTION ANALYSIS
+------------------------------------------------------------------------------
+'''
+class join_dfunc():
     def __init__(self, time, currL, currR, trange=None, voltL=None, voltR=None,
                  dV=1, nstep=500, xrange=None, yrange=None, fid='fid'):
         # Store inputs
@@ -443,10 +596,6 @@ class dfunc_movie():
                                             self.currR[tt, :],
                                             voltL=self.voltL, voltR=self.voltR)
             ax2.plot(revolt, func)
-
-            bbb = np.where(revolt <= 0)
-            ax2.plot(np.flip(-revolt[bbb]), np.flip(func[bbb]))
-
             ax2.set_xlabel('Potential [V]', fontsize=30)
             ax2.set_ylabel('f(V)', fontsize=30)
             ax2.tick_params(labelsize=20)
@@ -461,6 +610,15 @@ class dfunc_movie():
         anim = animation.FuncAnimation(fig, generate_frame,
                                        frames=self.nframes, interval=25)
         anim.save('./videos/{0}-dfunc-combine.mp4'.format(self.fid))
+
+
+''' --------------------------------------------------------------------------
+    ENERGY INTEGRAL CALCULATION (need to adjust to own class function)
+------------------------------------------------------------------------------
+'''
+class energy_integral():
+    def __init__(self):
+        pass
 
     # Calculate Ti using the energy integral
     def calc_enit(self, dt=1):
@@ -498,6 +656,87 @@ class dfunc_movie():
             tbx.savefig('./img/{0}-Ti-distfunc.png'.format(self.fid))
         else:
             print('arrTi not found, run "<var>.calc_enit()"')
+
+''' ----------------------------------------------------------------------
+    REGULAR DISTRIBUTION FUNCTION ROUTINES
+--------------------------------------------------------------------------
+'''
+def dfunc2(dataL, dataR, voltL=None, voltR=None, nwindow=31, nwindowR=None,
+           order=20):
+    # Create distribution function using two data arrays.
+    # Find max, cut the curve, do it for the other side, then join them
+    # at the top. Normalize to the mag of one side. Inputs are IV traces.
+
+    if nwindowR is None:
+        nwindowR = nwindow
+    else:
+        nwindowR = nwindowR
+
+    # Calculate gradL/gradR. Note that the length of grad is reduced by
+    # the window size and is even: int(nwindow/2)*2
+    xL, yL, gradL = sgsmooth(dataL, nwindow=nwindow, repeat=order)
+    xR, yR, gradR = sgsmooth(dataR, nwindow=nwindowR, repeat=order)
+    # voltL/voltR to match length of gradL/gradR
+    if (voltL is not None) and (voltR is not None):
+        vL = voltL[int(nwindow/2):-int(nwindow/2)]
+        vR = voltR[int(nwindowR/2):-int(nwindowR/2)]
+
+    # Find the max
+    argL = np.argmax(gradL)
+    argR = np.argmax(gradR)
+
+    # Slice curves and only keep the right side
+    sliceL = np.array(gradL[argL:])
+    sliceR = np.array(gradR[argR:])
+    # Slice voltL/voltR as well, but also shift the starting value to zero
+    if (voltL is not None) and (voltR is not None):
+        vL = np.array(vL[argL:]) - vL[argL]
+        vR = np.array(vR[argR:]) - vR[argR]
+        revolt = np.concatenate([np.flip(-vL), vR])
+    else:
+        revolt = None
+
+    # Normalize wrt right side of the curve
+    factor = gradR[argR] / gradL[argL]
+    index = np.arange(-len(sliceL), len(sliceR))
+
+    return index, np.concatenate([np.flip(sliceL)*factor, sliceR]), revolt
+
+
+def get_dfunc(cacurr, snw=41, passes=3):
+    # Gets the distribution function from a single I-V plot
+    nt, nvolt = cacurr.shape
+    nvolt -= 2*(snw//2)
+
+    cacurr_sm = np.empty((nt,nvolt))
+    grad_sm = np.empty((nt,nvolt))
+    
+    for tt in range(nt):
+        tbx.progress_bar(tt, nt, label='tt')
+        x, y, grad = sgsmooth(cacurr[tt,:], nwindow=snw, repeat=passes)
+        cacurr_sm[tt,:] = y
+        grad_sm[tt,:] = grad
+    return x, cacurr_sm, grad_sm
+
+
+def get_dfunc2(cacurrL, cacurrR, voltL, voltR, snw=41, order=3):
+    # Joins two distribution functions from two different I-V plots
+    nt, nvolt = cacurrL.shape
+    dV = (voltL[-1]-voltL[0])/(nvolt-1)
+    nv = nvolt//2
+    vrange = np.arange(-nv, nv+1) * dV
+
+    dfunc_arr = np.empty((nt,nvolt))
+
+    for tt in range(0,nt):
+        tbx.progress_bar(tt, nt, label='tt')
+        index, func, revolt = dfunc(cacurrL[tt,:], cacurrR[tt,:],
+                                    voltL=voltL, voltR=voltR)
+        index += nv
+        aaa = np.where((index>=0) & (index<vrange.shape))
+        dfunc_arr[tt, index] = func
+
+    return vrange, dfunc_arr
 
 
 ''' ----------------------------------------------------------------------
@@ -731,60 +970,3 @@ def exv2(volt, data, **kwargs):
     vavg = np.sum([jj*np.sqrt(ii) for ii, jj in zip(arrE, cut) if ii != 0])
 
     return vavg/den
-
-
-def dfunc(dataL, dataR, voltL=None, voltR=None, nwindow=31, nwindowR=None,
-          order=20):
-    # Create distribution function using two data arrays.
-    # Find max, cut the curve, do it for the other side, then join them
-    # at the top. Normalize to the mag of one side. Inputs are IV traces.
-
-    if nwindowR is None:
-        nwindowR = nwindow
-    else:
-        nwindowR = nwindowR
-
-    # Calculate gradL/gradR. Note that the length of grad is reduced by
-    # the window size and is even: int(nwindow/2)*2
-    xL, yL, gradL = sgsmooth(dataL, nwindow=nwindow, repeat=order)
-    xR, yR, gradR = sgsmooth(dataR, nwindow=nwindowR, repeat=order)
-    # voltL/voltR to match length of gradL/gradR
-    if (voltL is not None) and (voltR is not None):
-        vL = voltL[int(nwindow/2):-int(nwindow/2)]
-        vR = voltR[int(nwindowR/2):-int(nwindowR/2)]
-
-    # Find the max
-    argL = np.argmax(gradL)
-    argR = np.argmax(gradR)
-
-    # Slice curves and only keep the right side
-    sliceL = np.array(gradL[argL:])
-    sliceR = np.array(gradR[argR:])
-    # Slice voltL/voltR as well, but also shift the starting value to zero
-    if (voltL is not None) and (voltR is not None):
-        vL = np.array(vL[argL:]) - vL[argL]
-        vR = np.array(vR[argR:]) - vR[argR]
-        revolt = np.concatenate([np.flip(-vL), vR])
-    else:
-        revolt = None
-
-    # Normalize wrt right side of the curve
-    factor = gradR[argR] / gradL[argL]
-    index = np.arange(-len(sliceL), len(sliceR))
-
-    return index, np.concatenate([np.flip(sliceL)*factor, sliceR]), revolt
-
-
-def get_dfunc(cacurr, snw=41, passes=3):
-    nt, nvolt = cacurr.shape
-    nvolt -= 2*(snw//2)
-
-    cacurr_sm = np.empty((nt,nvolt))
-    grad_sm = np.empty((nt,nvolt))
-    
-    for tt in range(nt):
-        tbx.progress_bar(tt, nt, label='tt')
-        x, y, grad = sgsmooth(cacurr[tt,:], nwindow=snw, repeat=passes)
-        cacurr_sm[tt,:] = y
-        grad_sm[tt,:] = grad
-    return x, cacurr_sm, grad_sm

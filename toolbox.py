@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           04 Jun 2021
+DATE:           28 Jun 2021
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -61,7 +61,7 @@ def show_progress_bar(*args, **kwargs):
     progress_bar(*args, **kwargs)
 
 
-def prefig(figsize=(16, 4.5), labelsize=35, ticksize=25, xlabel='x',
+def prefig(figsize=(16, 4.5), labelsize=30, ticksize=25, xlabel='x',
            ylabel='y'):
     ''' ----------------------------------------------------------------------
     Preamble to create a figure with appropriate labels.
@@ -521,11 +521,12 @@ def savefig(*args, **kwargs):
 
 
 
+
+''' --------------------------------------------------------------------------
+    B-DOT PROBE ROUTINES
+------------------------------------------------------------------------------
+'''
 class bdot:
-    ''' ----------------------------------------------------------------------
-        B-DOT PROBE ROUTINES
-    --------------------------------------------------------------------------
-    '''
     def __init__(self):
         pass
 

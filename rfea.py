@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           22 Jun 2021
+DATE:           28 Jun 2021
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -356,8 +356,8 @@ class data():
 '''
 class dfunc():
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
+        self.x = x    # Voltage array
+        self.y = y    # -dI/dV array
 
         # Stored values
         self.rms = 0
@@ -444,16 +444,16 @@ class dfunc():
                **kwargs):
         if fitfunc is self.twogauss_func:
             wlabel = 'LSQ = {0:.4f}, '\
-                     'x1={1:.2f}, A1={2:.2f}, b1={3:.2f}, '\
-                     'x2={4:.2f}, A2={5:.2f}, b2={6:.2f}, '\
-                     'c={7:.2f}'.format(lsq, *popt)
+                     '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
+                     '$x_2$ = {4:.2f}, $A_2$ = {5:.2f}, $b_2$ = {6:.2f}, '\
+                     '$c$ = {7:.2f}'.format(lsq, *popt)
             # A2
             window.plot(x, self.gauss(x, popt[3], popt[4], popt[5], popt[6]),
                         color=color, alpha=0.3) 
         else:
             wlabel = 'LSQ = {0:.4f}, '\
-                     'x1={1:.2f}, A1={2:.2f}, b1={3:.2f}, '\
-                     'c={7:.2f}'.format(lsq, *popt)
+                     '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
+                     '$c$={7:.2f}'.format(lsq, *popt)
 
         window.plot(x, fitfunc(x, *popt), label=wlabel, color=color)
         # A1
@@ -468,11 +468,13 @@ class dfunc():
         popt2, lsq2 = self.gaussfit(guess=rec_guess)
         popt3, lsq3 = self.gaussfit(onegauss=1)
 
-        window.plot([self.x[0], self.x[-1]], [1.5*self.rms, 1.5*self.rms], '--')
+        if window is not None:
+            window.plot([self.x[0], self.x[-1]], [1.5*self.rms, 1.5*self.rms],
+                        '--')
 
         def check_reject(popt):
             # [x1, a1, b1, x2, a2, b2, c]
-            closeness = abs(popt[0]-popt[3])/((popt[0]+popt[3])/2)
+            closeness = 1#abs(popt[0]-popt[3])/((popt[0]+popt[3])/2)
             if (closeness < 0.1) or (popt[1] < 1.5*self.rms) or \
                (popt[4] < 1.5*self.rms):
                 return 1
@@ -494,13 +496,53 @@ class dfunc():
             if (lsq3 <= lsq):
                 color = 'green'
                 popt, lsq = popt3, lsq3
+                popt[4] = 0    # Set to zero since unused
                 fitfunc = self.onegauss_func
 
-        if popt is not None:
+        if (popt is not None) & (window is not None):
             self.dfplot(self.x, self.y, popt, lsq, fitfunc, window=window,
                         color=color)
 
         return popt    # guess will handle None values
+
+
+class dfunc_movie():
+    def __init__(self, tt):
+        self.tt = tt
+
+    def subplot(self, volt, curr, xx, yy, ygrad, amp, window=plt, xlabel=None,
+                labels=None, factor=None):
+        if factor is None:
+            factor = 1e6/9.08e3
+        # Find peaks of yy
+        peaks, _ = scipy.signal.find_peaks(
+                       ygrad*amp, height=0.006*factor*amp, distance=20, 
+                       prominence=0.003*factor*amp)
+        if labels is None:
+            window.plot(volt[xx], ygrad*amp, color='#0eaa57')
+            window.plot(volt[xx], yy, color='#0e10e6')
+            window.plot(volt, curr[self.tt, :], 'grey', alpha=0.7,
+                        color='#f78f2e')
+        else:
+            window.plot(volt[xx], ygrad*amp, label='$-dI/dV$ * {0}'.\
+                        format(amp), color='#0eaa57')
+            window.plot(volt[xx], yy, label='current (Savitzky-Golay)',
+                        color='#0e10e6')
+            window.plot(volt, curr[self.tt, :], alpha=0.7,
+                        label='current (original)', color='#f78f2e')
+        window.plot(volt[xx[peaks]], ygrad[peaks]*amp, 'x')
+        if window is not plt:
+            if xlabel is not None:
+                window.set_xlabel('Potential [V]', fontsize=30)
+            window.set_ylabel('magnitude', fontsize=30)
+            window.set_ylim([curr.min()*1.1, curr.max()*1.1])
+        else:
+            if xlabel is not None:
+                window.xlabel('Potential [V]', fontsize=30)
+            window.ylabel('magnitude', fontsize=30)
+            window.ylim([curr.min()*1.1, curr.max()*1.1])
+        window.tick_params(labelsize=20)
+        window.legend(fontsize=16, loc='upper left')
 
 
 ''' --------------------------------------------------------------------------
@@ -508,10 +550,13 @@ class dfunc():
 ------------------------------------------------------------------------------
 '''
 class join_dfunc():
-    def __init__(self, time, currL, currR, trange=None, voltL=None, voltR=None,
+    def __init__(self, time, voltL, voltR, currL, currR, trange=None,
                  dV=1, nstep=500, xrange=None, yrange=None, fid='fid'):
         # Store inputs
         self.time = time
+        self.voltL = voltL
+        self.voltR = voltR
+        self.volt = np.concatenate([np.flip(-voltL), voltR])
         self.currL = currL
         self.currR = currR
         self.dV = dV
@@ -534,15 +579,6 @@ class join_dfunc():
         self.nstep = nstep
         self.nframes = nt // nstep
 
-        if (voltL is None) & (voltR is None):
-            self.voltL = None
-            self.voltR = None
-            self.volt = np.arange(-nstepL, nstepR, dV)
-        else:
-            self.voltL = voltL
-            self.voltR = voltR
-            self.volt = np.concatenate([np.flip(-voltL), voltR])
-
         # Plotting parameters:
         if yrange is None:
             self.yrange = [-0.0035, 0.035]
@@ -558,6 +594,107 @@ class join_dfunc():
         self.arrTT = None
         self.arrTi = None
         self.enflag = None
+
+
+    # Function to join the two distribution functions
+    @staticmethod
+    def set_dfunc(voltL, voltR, dataL, dataR, dV=1, nwindow=41, nwindowR=None,
+                  order=3):
+        # Create distribution function using two data arrays.
+        # Find max, cut the curve, do it for the other side, then join them
+        # at the top. Normalize to the mag of one side. Inputs are IV traces.
+
+        if nwindowR is None:
+            nwindowR = nwindow
+        else:
+            nwindowR = nwindowR
+
+        # Calculate gradL/gradR. Note that the length of grad is reduced by
+        # the window size and is even: int(nwindow/2)*2
+        xL, yL, gradL = sgsmooth(dataL, nwindow=nwindow, repeat=order)
+        xR, yR, gradR = sgsmooth(dataR, nwindow=nwindowR, repeat=order)
+
+        vL = voltL[xL]
+        vR = voltR[xR]
+
+        dfuncL = dfunc(vL, gradL)
+        dfuncR = dfunc(vR, gradR)
+
+        # tbx.prefig()
+        poptL = dfuncL.bestfit(window=None)
+        poptR = dfuncR.bestfit(window=None)
+        # plt.legend(fontsize=20, loc='upper left')
+
+        # Choose leftmost peak of the bimodal distribution
+        def check_popt(popt, grad, vLR):
+            arg = np.argmax(grad)    # Default one-gauss peak value
+
+            # Change this value if two-gauss is used
+            if popt is not None:
+                if popt[4] in [0, None]:
+                    pp = popt[0]
+                else:
+                    pp = np.min([popt[0], popt[3]])
+                arg_test = np.argmin(abs(vLR-pp))
+
+                # Probably won't make sense if arg_test is too far from arg
+                if abs(arg_test-arg)/(arg) < 0.10:
+                    arg = arg_test
+                
+                print(np.argmin(abs(vLR-popt[0])), np.argmin(abs(vLR-popt[3])),
+                      np.argmax(grad), arg)
+            else:
+                print(arg)
+            return arg
+
+        argL = check_popt(poptL, gradL, vL)
+        argR = check_popt(poptR, gradR, vR)
+
+        # Slice curves and only keep the right side
+        sliceL = np.array(gradL[argL:])
+        sliceR = np.array(gradR[argR:])
+
+        # Normalize wrt right side of the curve
+        factor = gradR[argR] / gradL[argL]
+        index = np.arange(-len(sliceL), len(sliceR))
+        dfLR = np.concatenate([np.flip(sliceL)*factor, sliceR])
+
+        # Slice voltL/voltR as well, but also shift the starting value to zero
+        if (voltL is not None) and (voltR is not None):
+            vL = np.array(vL[argL:]) - vL[argL]
+            vR = np.array(vR[argR:]) - vR[argR]
+            vLvR = np.concatenate([np.flip(-vL), vR])
+        else:
+            vLvR = index*dV
+
+        return index, dfLR, vLvR
+
+
+    def calc_enint(self, dt=1):
+        nsteps = int(len(self.currL[:, 0])/dt)
+        arrTi = np.zeros(nsteps)
+        for step in range(nsteps):
+            tbx.progress_bar(step, nsteps)
+            tt = dt * step
+            # function can handle None
+            _, dfunc, vLvR = self.set_dfunc(self.voltL, self.voltR,
+                                            self.currL[tt, :], 
+                                            self.currR[tt, :])
+            arrTi[step] = enint(vLvR, dfunc)
+
+        self.arrTT = self.time[[ii*dt+self.t1 for ii in range(nsteps)]]*1e3+5
+        self.arrTi = arrTi
+        self.enflag = 1
+
+
+    # Plot Ti calculated from the energy integral
+    def plot_enint(self):
+        tbx.prefig(xlabel='time [ms]', ylabel='$T_i$ [eV]')
+        plt.title('{0} $T_i$ from energy integral (combined distribution '
+                  'function)'.format(self.fid), fontsize=20)
+        plt.plot(self.arrTT, self.arrTi)
+        tbx.savefig('./img/{0}-Ti-distfunc.png'.format(self.fid))
+
 
     def movie(self):
         # Plot movie to look at distribution function evolution
@@ -587,15 +724,10 @@ class join_dfunc():
             ax2.set_title('Distribution function (positive towards old '
                           'LaB$_6$), t ={0:.3f} ms [{1}]'.format(trigtime(
                               self.time, tt, off=self.t1), tt), fontsize=20)
-            if (self.voltL is None) or (self.voltR is None):
-                index, func, revolt = dfunc(self.currL[tt, :],
+            _, dfunc, vLvR = self.set_dfunc(self.voltL, self.voltR,
+                                            self.currL[tt, :],
                                             self.currR[tt, :])
-                revolt = index*self.dV
-            else:
-                index, func, revolt = dfunc(self.currL[tt, :],
-                                            self.currR[tt, :],
-                                            voltL=self.voltL, voltR=self.voltR)
-            ax2.plot(revolt, func)
+            ax2.plot(vLvR, dfunc)
             ax2.set_xlabel('Potential [V]', fontsize=30)
             ax2.set_ylabel('f(V)', fontsize=30)
             ax2.tick_params(labelsize=20)
@@ -613,96 +745,21 @@ class join_dfunc():
 
 
 ''' --------------------------------------------------------------------------
-    ENERGY INTEGRAL CALCULATION (need to adjust to own class function)
+    ENERGY INTEGRAL CALCULATION
 ------------------------------------------------------------------------------
 '''
-class energy_integral():
-    def __init__(self):
-        pass
+def enint(volt, dfunc):
+    den = np.sum([jj/np.sqrt(abs(ii)) for ii, jj in zip(volt, dfunc)
+                 if ii != 0])
+    vavg = np.sum([jj*np.sqrt(abs(ii)) for ii, jj in zip(volt, dfunc)
+                  if ii != 0])
+    return vavg/den
 
-    # Calculate Ti using the energy integral
-    def calc_enit(self, dt=1):
-        self.en_int_dt = dt
-        nsteps = int(len(self.currL[:, 0])/dt)
-        arrTi = np.zeros(nsteps)
-        for step in range(nsteps):
-            tbx.progress_bar(step, nsteps)
-            tt = dt * step
-            if (self.voltL is None) or (self.voltR is None):
-                index, func, revolt = dfunc(self.currL[tt, :],
-                                            self.currR[tt, :])
-                revolt = index*self.dV
-            else:
-                index, func, revolt = dfunc(self.currL[tt, :],
-                                            self.currR[tt, :],
-                                            voltL=self.voltL, voltR=self.voltR)
-            den = np.sum([jj/np.sqrt(abs(ii)) for ii, jj in zip(revolt, func)
-                          if ii != 0])
-            vavg = np.sum([jj*np.sqrt(abs(ii)) for ii, jj in zip(revolt, func)
-                           if ii != 0])
-            arrTi[step] = vavg/den
-
-        self.arrTT = self.time[[ii*dt+self.t1 for ii in range(nsteps)]]*1e3+5
-        self.arrTi = arrTi
-        self.enflag = 1
-
-    # Plot Ti calculated from the energy integral
-    def plot_enit(self):
-        if self.arrTi is not None:
-            tbx.prefig(xlabel='time [ms]', ylabel='$T_i$ [eV]')
-            plt.title('{0} $T_i$ from energy integral (combined distribution '
-                      'function)'.format(self.fid), fontsize=20)
-            plt.plot(self.arrTT, self.arrTi)
-            tbx.savefig('./img/{0}-Ti-distfunc.png'.format(self.fid))
-        else:
-            print('arrTi not found, run "<var>.calc_enit()"')
 
 ''' ----------------------------------------------------------------------
     REGULAR DISTRIBUTION FUNCTION ROUTINES
 --------------------------------------------------------------------------
 '''
-def dfunc2(dataL, dataR, voltL=None, voltR=None, nwindow=31, nwindowR=None,
-           order=20):
-    # Create distribution function using two data arrays.
-    # Find max, cut the curve, do it for the other side, then join them
-    # at the top. Normalize to the mag of one side. Inputs are IV traces.
-
-    if nwindowR is None:
-        nwindowR = nwindow
-    else:
-        nwindowR = nwindowR
-
-    # Calculate gradL/gradR. Note that the length of grad is reduced by
-    # the window size and is even: int(nwindow/2)*2
-    xL, yL, gradL = sgsmooth(dataL, nwindow=nwindow, repeat=order)
-    xR, yR, gradR = sgsmooth(dataR, nwindow=nwindowR, repeat=order)
-    # voltL/voltR to match length of gradL/gradR
-    if (voltL is not None) and (voltR is not None):
-        vL = voltL[int(nwindow/2):-int(nwindow/2)]
-        vR = voltR[int(nwindowR/2):-int(nwindowR/2)]
-
-    # Find the max
-    argL = np.argmax(gradL)
-    argR = np.argmax(gradR)
-
-    # Slice curves and only keep the right side
-    sliceL = np.array(gradL[argL:])
-    sliceR = np.array(gradR[argR:])
-    # Slice voltL/voltR as well, but also shift the starting value to zero
-    if (voltL is not None) and (voltR is not None):
-        vL = np.array(vL[argL:]) - vL[argL]
-        vR = np.array(vR[argR:]) - vR[argR]
-        revolt = np.concatenate([np.flip(-vL), vR])
-    else:
-        revolt = None
-
-    # Normalize wrt right side of the curve
-    factor = gradR[argR] / gradL[argL]
-    index = np.arange(-len(sliceL), len(sliceR))
-
-    return index, np.concatenate([np.flip(sliceL)*factor, sliceR]), revolt
-
-
 def get_dfunc(cacurr, snw=41, passes=3):
     # Gets the distribution function from a single I-V plot
     nt, nvolt = cacurr.shape
@@ -837,18 +894,21 @@ def find_Ti_exp(volt, curr, startpx=100, endpx=100, plot=0, mstime=0,
     Ti_err = np.sqrt(np.diag(pcov))[1]
 
     if plot != 0:
-        tbx.prefig(xlabel='peak pulse potential [V]',
-                   ylabel='current [$\mu$A]')
-        plt.plot(volt, temp, label='{0} ms'.format(mstime))
-        plt.title('{0} exponential fit, t = {1:.2f} ms'.format(fid, mstime),
+        tbx.prefig(xlabel='Discriminator grid voltage [V]',
+                   ylabel='Current [$\mu$A]')
+        plt.plot(volt, temp, color='#0e10e6')  # ,label='{0} ms'.format(mstime), 
+        plt.title('exponential fit, t = {0:.2f} ms'.format(mstime),
                   fontsize=20)
-        plt.plot(volt[argmin:], temp[argmin:])
-        plt.plot(volt, [vstart for ii in volt], '--')
-        plt.plot(volt, [vend for ii in volt], '--')
-        plt.plot(volt[argmin-20:], exp_func(volt[argmin-20:], *popt), '--')
+        #plt.plot(volt[argmin:], temp[argmin:], color='#9208e7')
+        plt.plot(volt, [vstart for ii in volt], '--', color='#5cd05b')
+        plt.plot(volt, [vend for ii in volt], '--', color='#5cd05b')
+        plt.plot(volt[argmin-20:], exp_func(volt[argmin-20:], *popt), '--',
+                 label='$T_i$ = {0:.2f} eV'.format(Ti), color='#ff4900',
+                 linewidth=2)
         plt.ylim(np.min(temp)*0.96, np.max(temp)*1.04)
+        plt.legend(fontsize=20, loc='upper right')
         if save == 1:
-            tbx.savefig('./img/{0}-currpeak-exp-fit-{1:.2f}ms.png'.format(
+            tbx.savefig('./img/{0}-IV-expfit-{1:.2f}ms.png'.format(
                         fid, mstime))
 
     return Vp, Ti, Ti_err

@@ -1,7 +1,7 @@
 '''
 NAME:           get_bdot_calib.py
 AUTHOR:         swjtang
-DATE:           16 Aug 2019
+DATE:           01 Jul 2021
 DESCRIPTION:    Generates NA, the effective area of the probe (# turns * area)
                 from the B-dot calibration files (different for Bx, By, Bz)
 '''
@@ -24,6 +24,7 @@ from lib.binary_to_ascii import b2a
 # print([os.path.basename(item) for item in flist])
 
 
+# ----------------------------------------------------------------------------
 # checks if the calibration files exist for a given probe
 def probe_check(probe, fdir):
     flist = [os.path.basename(item) for item in glob.glob(fdir+'*.DAT')]
@@ -35,11 +36,12 @@ def probe_check(probe, fdir):
     if len(chreq) > 0:
         print('!!! Missing calibration for Bdot #{0}: ({1})'.
               format(probe, chreq))
-        return(None)
+        return None
     else:
-        return(calib)
+        return calib
 
 
+# ----------------------------------------------------------------------------
 # List all the probes in the directory. Assumes filenames in the format
 #  ""<probe>_BX.DAT".
 def get_probe_list(fdir):
@@ -48,7 +50,7 @@ def get_probe_list(fdir):
           np.unique(np.array([re.split('_', item)[0] for item in names])))
 
 
-###############################################################################
+# ----------------------------------------------------------------------------
 # plots all 3 calibration curves
 def calib_3plots(probeid, data1, data2, data3):
     fig, ax1 = plt.subplots(figsize=(10, 11.25/2))
@@ -77,7 +79,7 @@ def calib_3plots(probeid, data1, data2, data3):
     ax3.tick_params(axis='both', labelsize=20)
 
 
-###############################################################################
+# ----------------------------------------------------------------------------
 # PROBE AREA CALIBRATION
 def area_calib(data, g=10, r=5.4e-2, label='', quiet=0, debug=0):
     # the data needs to contain frequency and logmag data in dict
@@ -90,50 +92,57 @@ def area_calib(data, g=10, r=5.4e-2, label='', quiet=0, debug=0):
         return AA*x + BB
 
     # the gradient contains the area value
-    AA, BB = curve_fit(fline, 2*np.pi*freq, ratioAR)[0]  # fit to data x, y
-
+    popt, _ = curve_fit(fline, 2*np.pi*freq, ratioAR)  # fit to data x, y
+    
     mu = const.mu_0
-    area = AA / (32 * (4/5)**1.5 * g * mu / r)
+    area = popt[0] / (32 * (4/5)**1.5 * g * mu / r)    # here popt[0] is omega
     qprint(quiet, label+'Effective area = (Probe area * turns), NA = {0:.4f} '
            ' [cm^2]'.format(area*1e4))
 
-    if debug != 0:
+    # Here we want to plot in frequency so multiply by 2pi so that we get omega
+    popt[0] *= 2*np.pi
+
+    if (debug != 0) and (quiet == 0):
         plt.figure(figsize=(8, 4.5))
+        plt.title(label, fontsize=20)
         plt.plot(freq/1e3, ratioAR)
-        plt.plot(freq/1e3, fline(freq, AA, BB))
+        plt.plot(freq/1e3, fline(freq, *popt))
         plt.xlabel('Frequency [kHz]', fontsize=16)
         plt.ylabel('magnitude A/R', fontsize=16)
         plt.tick_params(axis='both', labelsize=20)
         plt.legend(['original', 'best fit line'], fontsize=16)
 
-    return(area)   # returns in m^2
-###############################################################################
+    return area   # output is [m^2]
 
 
+# ----------------------------------------------------------------------------
+# This is the main routine, call this function
 def get_bdot_calib(probeid='1', fdir='/home/swjtang/bdotcalib/', quiet=0,
-                   debug=0, output=0, ch=2):
+                   debug=None, output=0, ch=2, **kwargs):
     # exception list of probe calibrations in channel 1 of VNA
-    if probeid in ['11']:
+    # July 2021: The new calibrations are almost exclusively channel 1
+    if probeid in ['11', '20', '21', 'C12', 'C14']:
         ch = 1
     if quiet == 0:
         get_probe_list(fdir)
     bnames = probe_check(probeid, fdir)
 
-    data1 = b2a(fdir+bnames[0], ch=ch, output=output)
-    data2 = b2a(fdir+bnames[1], ch=ch, output=output)
-    data3 = b2a(fdir+bnames[2], ch=ch, output=output)
+    data1 = b2a(fdir+bnames[0], ch=ch, output=output, quiet=quiet, **kwargs)
+    data2 = b2a(fdir+bnames[1], ch=ch, output=output, quiet=quiet, **kwargs)
+    data3 = b2a(fdir+bnames[2], ch=ch, output=output, quiet=quiet, **kwargs)
 
-    if debug != 0:
+    if debug is not None:
         calib_3plots(probeid, data1, data2, data3)
 
     areas = np.empty(3)
     for ii in range(3):
         data = [data1, data2, data3]
         label = ['BX', 'BY', 'BZ']
-        areas[ii] = area_calib(data[ii], label=label[ii]+' ', quiet=quiet)
+        areas[ii] = area_calib(data[ii], label=label[ii]+' ', quiet=quiet,
+                               debug=debug)
 
     temp = {
         'probeid': probeid,
         'areas':   areas
     }
-    return(temp)
+    return temp

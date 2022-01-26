@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           28 Jun 2021
+DATE:           25 Jan 2022
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -22,6 +22,8 @@ import scipy.signal
                 VISUALIZATION
 -------------------------------------------------------------------------------
 '''
+
+
 def progress_bar(cur_arr, tot_arr, label=None, header=''):
     ''' ----------------------------------------------------------------------
     Prints a output/progress bar for jupyter.
@@ -101,6 +103,8 @@ def get_line_profile(x, y, data, axis='x', value=0):
                 FILTERING
 ------------------------------------------------------------------------------
 '''
+
+
 def filter_bint(*args, **kwargs):
     # ALIAS FOR bdot.bint
     return bdot.bint(*args, **kwargs)
@@ -231,6 +235,8 @@ def smooth(data, nwindow=351, polyn=2, **kwargs):
                 FFT ROUTINES
 ------------------------------------------------------------------------------
 '''
+
+
 def average_fft(data, time, dt=1, axis=0, avgflag=1):
     ''' -----------------------------------------------------------------------
     FFT then average over dimensions in a multi-dimensional dataset.
@@ -265,7 +271,7 @@ def fft(*args, **kwargs):
 
 
 def plot_fft(data, freqarr, frange=None, units='kHz', title='set title=',
-             figsize=(8, 4.5), fname=None, save=None, ylim=None):
+             figsize=(8, 4.5), fname=None, save=None, ylim=None, oldfig=None):
     ''' ----------------------------------------------------------------------
     Plots the FFT of a given dataset.
     INPUTS:
@@ -282,7 +288,8 @@ def plot_fft(data, freqarr, frange=None, units='kHz', title='set title=',
     plt.rcParams['xtick.labelsize'] = 18
     plt.rcParams['ytick.labelsize'] = 18
 
-    fig = plt.figure(figsize=figsize)
+    if oldfig is None:
+        fig = plt.figure(figsize=figsize)
     plt.plot(freqarr, data)
 
     if fname is not None:
@@ -291,8 +298,10 @@ def plot_fft(data, freqarr, frange=None, units='kHz', title='set title=',
     else:
         plt.title(title, fontsize=24)
 
-    plt.xlabel('Frequency [' + units + ']', fontsize=20)
-    plt.ylabel('Amplitude', fontsize=20)
+    plt.xlabel('Frequency [' + units + ']', fontsize=30)
+    plt.ylabel('Amplitude', fontsize=30)
+    plt.xticks(fontsize=25)
+    plt.yticks(fontsize=25)
 
     if frange is not None:   # sets the plot range
         x1, x2 = frange[0], frange[1]
@@ -351,6 +360,8 @@ def fft_peak_find(fftdata, freqarr, frange=None, plot=0):
                 MATH & CALCULATIONS
 ------------------------------------------------------------------------------
 '''
+
+
 def c_correlate(sig1, sig2):
     ''' ----------------------------------------------------------------------
     Calculates the NORMALIZED cross-correlation Pxy(L) as a function of lag L.
@@ -469,6 +480,8 @@ def check_save_filepath(save, file_type):
                 AUXILLARY FUNCTIONS
 ------------------------------------------------------------------------------
 '''
+
+
 def read_IDL_sav(fdir, fname):
     ''' ----------------------------------------------------------------------
     Reads IDL .sav files.
@@ -520,12 +533,12 @@ def savefig(*args, **kwargs):
     return plt.savefig(*args, **kwargs, bbox_inches='tight')
 
 
-
-
 ''' --------------------------------------------------------------------------
     B-DOT PROBE ROUTINES
 ------------------------------------------------------------------------------
 '''
+
+
 class bdot:
     def __init__(self):
         pass
@@ -554,7 +567,6 @@ class bdot:
         # mean_val is broadcast into the dimensions of data, requiring the
         # first dimension to be time or the trailing axes won't align.
         return bint_data
-
 
     def correct_angle(x, y, dU, dV, dist=50):
         ''' ------------------------------------------------------------------
@@ -585,4 +597,3 @@ class bdot:
         else:
             print('!!! shape of input arrays does not match data')
             return None, None
-

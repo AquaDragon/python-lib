@@ -1,7 +1,7 @@
 '''
 NAME:           get_bdot_calib.py
 AUTHOR:         swjtang
-DATE:           01 Jul 2021
+DATE:           25 Jan 2022
 DESCRIPTION:    Generates NA, the effective area of the probe (# turns * area)
                 from the B-dot calibration files (different for Bx, By, Bz)
 '''
@@ -96,7 +96,7 @@ def area_calib(data, g=10, r=5.4e-2, label='', quiet=0, debug=0):
     
     mu = const.mu_0
     area = popt[0] / (32 * (4/5)**1.5 * g * mu / r)    # here popt[0] is omega
-    qprint(quiet, label+'Effective area = (Probe area * turns), NA = {0:.4f} '
+    qprint(quiet, label+' Effective area = (Probe area * turns), NA = {0:.4f} '
            ' [cm^2]'.format(area*1e4))
 
     # Here we want to plot in frequency so multiply by 2pi so that we get omega
@@ -138,7 +138,7 @@ def get_bdot_calib(probeid='1', fdir='/home/swjtang/bdotcalib/', quiet=0,
     for ii in range(3):
         data = [data1, data2, data3]
         label = ['BX', 'BY', 'BZ']
-        areas[ii] = area_calib(data[ii], label=label[ii]+' ', quiet=quiet,
+        areas[ii] = area_calib(data[ii], label=label[ii], quiet=quiet,
                                debug=debug)
 
     temp = {

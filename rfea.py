@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           28 Jun 2021
+DATE:           25 Jan 2022
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -12,6 +12,7 @@ importlib.reload(<module>)
 import h5py
 import importlib
 import numpy as np
+import numpy.polynomial.polynomial as poly
 import re
 import scipy
 from scipy.optimize import curve_fit
@@ -73,6 +74,8 @@ class params(object):
     GET DATA METHODS
 --------------------------------------------------------------------------
 '''
+
+
 class data():
     def __init__(self, obj):
         self.obj = obj
@@ -85,8 +88,14 @@ class data():
             self.obj.fname, nsteps=self.obj.nsteps, nshots=self.obj.nshots,
             rchan=[self.obj.ch_volt], rshot=rshot, quiet=quiet, **kwargs)
 
-        # dataset output is Arr[nt, shot, chan, step]
-        data = np.transpose(dataset['data'], (0, 3, 1, 2))
+        # check dimension of dataset output
+        if len(np.shape(np.array(dataset['data']))) == 6:
+            # Arr[nt, nx, ny, shot, chan, step]
+            temp = np.transpose(dataset['data'], (0, 1, 2, 5, 3, 4))
+            data = temp[:, 0, 0, ...]
+        else:
+            # Arr[nt, shot, chan, step]
+            data = np.transpose(dataset['data'], (0, 3, 1, 2))
 
         # x100 = (50x from voltmeter, x2 from 1M/50 Ohm digitizer mismatch)
         self.obj.volt = np.mean(data[10000:35000, :, 0, 0]*100, axis=0)
@@ -100,7 +109,16 @@ class data():
 
         datatemp = dataset['data']
         self.obj.nt = datatemp.shape[0]
-        data = np.transpose(datatemp, (0, 3, 1, 2))
+
+        # check dimension of dataset output
+        if len(np.shape(np.array(dataset['data']))) == 6:
+            # Arr[nt, nx, ny, shot, chan, step]
+            temp = np.transpose(dataset['data'], (0, 1, 2, 5, 3, 4))
+            data = temp[:, 0, 0, ...]
+        else:
+            # Arr[nt, shot, chan, step]
+            data = np.transpose(dataset['data'], (0, 3, 1, 2))
+
         if self.obj.ch_curr < self.obj.ch_bdot:
             curr = data[..., 0]
             bdot = data[..., 1]
@@ -156,24 +174,22 @@ class data():
                 volt, curr[tt, :]/self.obj.res, plot=0, save=0, **kwargs)
         return Ti, Vp, errTi
 
-    def plot_TiVp(self, Ti, Vp, ca=0):
+    def plot_TiVp(self, Ti, Vp, ca=0, limTi=20):
         tt = np.array([self.mstime(tt) for tt in self.obj.tarr])
+        temp = np.where(Ti < limTi)
 
         text = 'conditional average, exponential fit'
         if ca == 1:
-            text = 'YES '+text
+            text = 'YES ' + text
             svname = 'yes-condavg'
         else:
-            text = 'NO '+text
+            text = 'NO ' + text
             svname = 'no-condavg'
 
         tbx.prefig(xlabel='time [ms]', ylabel='$T_i$ [eV]')
         plt.title('{0} $T_i$ vs time, {1} (all times)'.format(self.obj.fid,
                   text), fontsize=25)
-        # plt.fill_between(tt, tbx.smooth(self.obj.Ti-self.obj.errTi,
-        #                  nwindow=51),
-        # tbx.smooth(self.obj.Ti+self.obj.errTi, nwindow=51), alpha=0.2)
-        plt.plot(tt, tbx.smooth(Ti, nwindow=51))
+        plt.plot(tt[temp], tbx.smooth(Ti, nwindow=51)[temp])
         tbx.savefig('./img/{0}-{1}-Ti-vs-time.png'.format(self.obj.fid,
                                                           svname))
 
@@ -221,9 +237,11 @@ class data():
                   fontsize=20)
         tbx.savefig('./img/{0}-condavg-range.png'.format(self.obj.fid))
 
-    def plot_bint_shift(self, bint, curr=None, step=0, shot=0):
+    def plot_bint_shift(self, bint, curr=None, step=0, shot=0, ref=None):
+        if ref is None:
+            ref = [0, 0]
         # Plots the reference bint/current with a test shot
-        bref = bint[self.obj.bt1:self.obj.bt2, 0, 0]
+        bref = bint[self.obj.bt1:self.obj.bt2, ref[0], ref[1]]
         bdata = bint[self.obj.bt1:self.obj.bt2, step, shot]
         xlag = fmp.lagtime(bref, bdata)['xlag']
         if xlag is not None:
@@ -235,7 +253,8 @@ class data():
             plt.legend(fontsize=20)
 
             if curr is not None:
-                curr0 = self.obj.curr[self.obj.bt1:self.obj.bt2, 0, 0]
+                curr0 = self.obj.curr[self.obj.bt1:self.obj.bt2, ref[0],
+                                      ref[1]]
                 curr1 = self.obj.curr[self.obj.bt1:self.obj.bt2, step, shot]
                 tbx.prefig()
                 plt.title('current signals', fontsize=25)
@@ -354,72 +373,150 @@ class data():
     SINGLE DISTRIBUTION FUNCTION ANALYSIS
 ------------------------------------------------------------------------------
 '''
+
+
 class dfunc():
-    def __init__(self, x, y):
-        self.x = x    # Voltage array
-        self.y = y    # -dI/dV array
+    def __init__(self, x, y, xrange=None):
+        clip = int(len(x)*0.07)
+        self.x = x[clip:-clip]    # Voltage array
+        self.y = y[clip:-clip]    # -dI/dV array
 
         # Stored values
+        if xrange is not None:
+            self.xrange = xrange
+        else:
+            self.xrange = [30, 95]
+            self.set_xrange()
+
         self.rms = 0
+        self.update_rms()
+
         self.guess = None
         self.bounds = None
 
     # Define fit functions ---------------------------------------------------
     @staticmethod
     def onegauss_func(x, x1, a1, b1, x2, a2, b2, c):
-        return a1 * np.exp(-((x-x1)/b1)**2) + c
+        return a1 * np.exp(-(x-x1)**2/(2 * b1**2)) + c
 
     @staticmethod
     def twogauss_func(x, x1, a1, b1, x2, a2, b2, c):
-        return a1 * np.exp(-((x-x1)/b1)**2) +\
-               a2 * np.exp(-((x-x2)/b2)**2) + c
+        return a1 * np.exp(-(x-x1)**2/(2 * b1**2)) +\
+               a2 * np.exp(-(x-x2)**2/(2 * b2**2)) + c
 
     @staticmethod
     def gauss(x, x1, a1, b1, c):
-        return a1* np.exp(-((x-x1)/b1)**2) + c
-
+        return a1 * np.exp(-(x-x1)**2/(2 * b1**2)) + c
 
     # Calculate the max noise value
-    def update_rms(self, xrange=None):
-        if xrange is None:
-            xrange=[43, 95]
-        ind = np.where((self.x < xrange[0]) | (self.x > xrange[1]))
-        self.rms = np.amax(self.y[ind]) 
+    def update_rms(self):
+        ind = np.where((self.x < self.xrange[0]) | (self.x > self.xrange[1]))
+        self.rms = np.amax(abs(self.y[ind]))
         return self.rms
 
+    # Recalculate the xrange based on the given data
+    def set_xrange(self):
+        # Indices for peak value, guess L and R values
+        argx1 = np.argmin(abs(self.x - self.xrange[0]))
+        argx2 = np.argmin(abs(self.x - self.xrange[1]))
+        argmax = np.argmax(self.y[argx1:argx2]) + argx1
+
+        # Search for first minimum point
+        def argL_func(peakL):
+            if len(peakL) > 0:
+                test = peakL[-1] + argx1
+                # Avoid cutting off in the middle of bimodal distribution
+                if self.y[test]/self.y[argmax] > 0.2:
+                    peakL = peakL[:-1]
+                    return argL_func(peakL)
+                return test
+            else:
+                return argx1
+
+        def argR_func(peakR):
+            if len(peakR) > 0:
+                test = peakR[0] + argmax
+                if self.y[test]/self.y[argmax] > 0.2:
+                    peakR = peakR[1:]
+                    return argR_func(peakR)
+                return test
+            else:
+                return argx2
+
+        peakL, _ = scipy.signal.find_peaks(-self.y[argx1:argmax])
+        argL = argL_func(peakL)
+
+        peakR, _ = scipy.signal.find_peaks(-self.y[argmax:argx2])
+        argR = argR_func(peakR)
+
+        self.xrange = [self.x[argL], self.x[argR]]
+        return self.xrange
 
     # Set default values if no input is specified ----------------------------
     # Array is for gaussfit (x1, a1, b1, x2, a2, b2, c)
-    def set_guess(self):
+    def set_guess(self, onegauss=None, guess_range=None):
+        bm = None   # flag
+        if guess_range is None:
+            self.guess = self.xrange
+        else:
+            self.guess = guess_range
+
         a1 = np.amax(self.y)
         argb1 = np.argwhere(self.y > np.amax(self.y)/2)
         b1 = (self.x[argb1[-1]]-self.x[argb1[0]])/(2*np.sqrt(2*np.log(2)))
         a2 = self.update_rms()    # this is self.rms
 
-        guess = [60, a1, b1, 80, a2, 1, 0]    # checkpoint
+        def xrpct(pct):
+            return pct * (self.xrange[1]-self.xrange[0]) + self.xrange[0]
 
-        # Find peaks and replace if they are found
-        peaks, _ = scipy.signal.find_peaks(self.y, height=1.5*a2, 
-                                           distance=20, prominence=a2)
-        if len(peaks) > 0:
-            guess[0] = self.x[peaks[0]]
-        if len(peaks) > 1:
-            guess[3] = self.x[peaks[1]]
-        return guess
+        # Find peaks with amplitudes greater than noise level and at least
+        #  1 eV apart
+        dx = self.x[1]-self.x[0]
+        peaks, prop = scipy.signal.find_peaks(self.y, height=1.5*a2,
+                                              width=1/dx, distance=1/dx)
+        parg = np.where((self.x[peaks] > self.guess[0]) &
+                        (self.x[peaks] < self.guess[1]))
+        peaks = peaks[parg]
+        # If there are exactly two peaks then absolutely use bimodal
+        if len(peaks) == 2:
+            w1, w2 = prop['width_heights'][parg]
+            guess = [self.x[peaks[0]], self.y[peaks[0]], np.amin([15, dx*w1]),
+                     self.x[peaks[1]], self.y[peaks[1]], np.amin([15, dx*w2]),
+                     0]
+            if onegauss is None:
+                bm = 1    # Bimodal
+            else:
+                mu1, a1, b1, mu2, a2, b2, c = guess
+                if a2 > a1:
+                    guess = [mu2, a2, b2, mu1, a1, b1, c]
+        elif len(peaks) == 1:
+            w1 = prop['width_heights'][parg]
+            if self.x[peaks]-xrpct(0.71) > self.x[peaks]-xrpct(0.32):
+                guess_x2 = xrpct(0.32)
+            else:
+                guess_x2 = xrpct(0.71)
+            guess = [self.x[peaks], self.y[peaks], np.amin([15, dx*w1]),
+                     guess_x2, a2, 12, 0]
+        else:
+            # Guess from plot
+            guess = [xrpct(0.32), a1, b1, xrpct(0.71), a2, 12, 0]
 
+        # Guesses should not have zero because it will trigger the boundary
+        # condition.
+        return guess, bm
 
     def set_bounds(self):
-        _ = self.update_rms()
-        return [(50, self.rms, 0, 50, self.rms, 0, -0.5),
-                (90, 1.1*np.amax(self.y), 10,
-                 90, 1.1*np.amax(self.y), 10, 0.05)]
-
+        return [(self.xrange[0], self.rms, 0,
+                 self.xrange[0], self.rms, 0, -self.rms/2),
+                (self.xrange[1], 1.1*np.amax(self.y), 15,
+                 self.xrange[1], 1.1*np.amax(self.y), 15, self.rms/2)]
 
     # Fitting function for distribution function -----------------------------
-    def gaussfit(self, guess=None, bounds=None, onegauss=None, **kwargs):
+    def gaussfit(self, guess=None, bounds=None, onegauss=None, bm=None,
+                 **kwargs):
         # Set default guess and boundaries
         if guess is None:
-            guess = self.set_guess()
+            guess, bm = self.set_guess(onegauss=onegauss, **kwargs)
         if bounds is None:
             bounds = self.set_bounds()
 
@@ -431,127 +528,233 @@ class dfunc():
         try:
             popt, _ = scipy.optimize.curve_fit(fitfunc, self.x, self.y,
                                                p0=guess, bounds=bounds)
+            # Add case: Have to use bimodal if double peaked
+            if bm or (self.bimodal_test(popt) is not None) or \
+                    (popt[4] is not 0):
+                # Rejection cases for bimodal:
+                #   1. The choice of fit is unimodal/Maxwellian
+                if onegauss is not None:
+                    if popt[4] > popt[1]:
+                        mu1, a1, b1, mu2, a2, b2, c = popt
+                        popt = [mu2, a2, b2, mu1, 0, b1, c]
+                    else:
+                        popt[4] = 0
+                #   2. One of the peaks is less than the noise level
+                elif popt[1] < 1.5*self.rms:
+                    mu1, a1, b1, mu2, a2, b2, c = popt
+                    popt = [mu2, a2, b2, mu1, 0, b1, c]
+                elif popt[4] < 1.5*self.rms:
+                    popt[4] = 0
+                #   3. One of the peaks is 4x smaller than the other
+                elif popt[1]/popt[4] < 0.25:
+                    mu1, a1, b1, mu2, a2, b2, c = popt
+                    popt = [mu2, a2, b2, mu1, 0, b1, c]
+                elif popt[4]/popt[1] < 0.25:
+                    popt[4] = 0
+                #   4. The two peaks are on top of each other
+                elif abs(popt[0]-popt[3]) < (popt[2] + popt[5])/2:
+                    popt[4] = 0
+
             # Calculate least squares for error
-            arg = np.argwhere(self.y > self.rms)
+            arg = np.argwhere(self.y > 1.5*self.rms)
             lsq = np.sum((self.y[arg] - fitfunc(self.x[arg], *popt))**2)
             return popt, lsq
         except (RuntimeError, ValueError):
             return None, None
 
-
     # Plot components of the distribution function ---------------------------
     def dfplot(self, x, y, popt, lsq, fitfunc, color='red', window=None,
-               **kwargs):
+               label=None, **kwargs):
+        # Given popt, figure out if unimodal or bimodal
+        if self.bimodal_test(popt) is not None:
+            bu = 'Bimodal'    # Bimodal
+        else:
+            bu = 'Unimodal'   # Unimodal
+
         if fitfunc is self.twogauss_func:
-            wlabel = 'LSQ = {0:.4f}, '\
+            wlabel = '{0}: '.format(bu) + \
                      '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
                      '$x_2$ = {4:.2f}, $A_2$ = {5:.2f}, $b_2$ = {6:.2f}, '\
-                     '$c$ = {7:.2f}'.format(lsq, *popt)
+                     '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
             # A2
             window.plot(x, self.gauss(x, popt[3], popt[4], popt[5], popt[6]),
-                        color=color, alpha=0.3) 
+                        color=color, alpha=0.3)
         else:
-            wlabel = 'LSQ = {0:.4f}, '\
+            bu = 'Unimodal'   # Unimodal
+            wlabel = '{0}: '.format(bu) + \
                      '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
-                     '$c$={7:.2f}'.format(lsq, *popt)
+                     '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
 
         window.plot(x, fitfunc(x, *popt), label=wlabel, color=color)
         # A1
         window.plot(x, self.gauss(x, popt[0], popt[1], popt[2], popt[6]),
                     color=color, alpha=0.3)
 
-
     # Multiple function analysis. Plot best curve from least squares. --------
-    def bestfit(self, window=None, rec_guess=None):
+    def bestfit(self, rec_guess=None, window=None, lsq=1e6, **kwargs):
         # rec_guess = A guess value to be passed to check for better guesses
-        popt1, lsq1 = self.gaussfit()
-        popt2, lsq2 = self.gaussfit(guess=rec_guess)
-        popt3, lsq3 = self.gaussfit(onegauss=1)
 
-        if window is not None:
-            window.plot([self.x[0], self.x[-1]], [1.5*self.rms, 1.5*self.rms],
-                        '--')
+        # Guess #1: Maxwellian / unimodal
+        popt, lsq1 = self.gaussfit(onegauss=1, **kwargs)
+        if lsq1 is not None:
+            if (lsq1 < lsq):
+                popt[4] = 0
+                lsq = lsq1
+                color = 'green'
+                fitfunc = self.onegauss_func
 
-        def check_reject(popt):
-            # [x1, a1, b1, x2, a2, b2, c]
-            closeness = 1#abs(popt[0]-popt[3])/((popt[0]+popt[3])/2)
-            if (closeness < 0.1) or (popt[1] < 1.5*self.rms) or \
-               (popt[4] < 1.5*self.rms):
-                return 1
+        # Guess #2: Maxwellian + beam / bimodal
+        popt2, lsq2 = self.gaussfit(**kwargs)
+        # print('popt2', popt2, lsq2)
+        # More conditions for rejecting a bimodal distribution
+        if (lsq2 is not None) and (popt2 is not None) and (popt is not None):
+            # Primary peak has comparable amplitude and width to unimodal
+            if (popt2[1]/popt[1] > 0.80) and (popt2[2]/popt[2] > 0.80):
+                pass
+            # The fit has to improve least squares by at least a factor of 10
+            elif (lsq2 < 0.1*lsq) and (popt2[4] != 0):
+                popt, lsq = popt2, lsq2
+                color = 'red'
+                fitfunc = self.twogauss_func
+
+        # # If an improved guess is submitted, use that
+        popt3, lsq3 = self.gaussfit(guess=rec_guess, **kwargs)
+        # print('popt2', popt2, lsq2)
+        # More conditions for rejecting a bimodal distribution
+        if (lsq3 is not None) and (popt3 is not None) and (popt is not None):
+            # Primary peak has comparable amplitude and width to unimodal
+            if (popt3[1]/popt[1] > 0.80) and (popt3[2]/popt[2] > 0.80):
+                pass
+            # The fit has to improve least squares by at least a factor of 10
+            elif (lsq3 < 0.1*lsq) and (popt3[4] != 0):
+                popt, lsq = popt3, lsq3
+                color = 'purple'
+                fitfunc = self.twogauss_func
+
+        if (window is not None) and (popt is not None):
+            self.dfplot(self.x, self.y, popt, lsq, fitfunc, window=window,
+                        color=color, label='{0:.2f}'.format(lsq))
+        return popt
+
+    # Test of bimodality by Robertson & Fryer (1969), Scandainavian
+    # Actuarial Journal
+    @staticmethod
+    def bimodal_test(popt):
+        # Check if input is None?
+        if popt is None:
+            return None    # Unimodal
+
+        # Require mu1 <= mu2
+        if popt[0] <= popt[3]:
+            mu1, a1, b1, mu2, a2, b2, c = popt
+        else:
+            mu2, a2, b2, mu1, a1, b1, c = popt
+
+        # Define constants
+        p1 = (a1-c) * b1 * np.sqrt(2*np.pi)
+        p2 = (a2-c) * b2 * np.sqrt(2*np.pi)
+        p = p1 / (p1+p2)
+        sigma1 = b1
+        sigma2 = b2
+        mu = (mu2-mu1)/(sigma1)
+        sigma = sigma2/sigma1
+
+        mu0 = np.sqrt((2*(sigma**4 - sigma**2 + 1)**1.5 - (2*sigma**6 -
+                      3*sigma**4 - 3*sigma**2 + 2)) / sigma**2)
+
+        if mu <= mu0:
+            return None    # Unimodal
+        else:
+            # Solve cubic equation
+            coeff = [mu*sigma**2, -mu**2, -mu*(sigma**2-2), sigma**2-1]
+            roots = np.array([])
+            for r in poly.polyroots(coeff):
+                # Check for (1) real roots, (2) less than mu, (3) greater
+                # than zero.
+                if (np.imag(r) == 0) and (mu > r) and (r > 0):
+                    roots = np.append(roots, r)
+            roots = np.sort(roots)
+
+            def p_root(value):
+                invp = 1 + (sigma**3 * value / (mu-value)) * np.exp(
+                    -value**2/2 + ((value-mu)/sigma)**2/2)
+                return 1/invp
+
+            # Should only have two distinct real roots
+            p1 = p_root(roots[0])
+            if len(roots) > 1:
+                p2 = p_root(roots[1])
+                if (p1 < p) and (p < p2):
+                    return 1       # Bimodal
+                else:
+                    return None    # Unimodal
             else:
                 return None
 
-        popt, lsq = None, 1e6
-        if lsq1 is not None:
-            if (lsq1 <= lsq) & (check_reject(popt1) is None):
-                popt, lsq = popt1, lsq1
-                color = 'red'
-                fitfunc = self.twogauss_func
-        if lsq2 is not None:
-            if (lsq2 <= lsq) & (check_reject(popt2) is None):
-                popt, lsq = popt2, lsq2
-                color = 'blue'
-                fitfunc = self.twogauss_func
-        if lsq3 is not None:
-            if (lsq3 <= lsq):
-                color = 'green'
-                popt, lsq = popt3, lsq3
-                popt[4] = 0    # Set to zero since unused
-                fitfunc = self.onegauss_func
-
-        if (popt is not None) & (window is not None):
-            self.dfplot(self.x, self.y, popt, lsq, fitfunc, window=window,
-                        color=color)
-
-        return popt    # guess will handle None values
-
-
-class dfunc_movie():
-    def __init__(self, tt):
-        self.tt = tt
-
-    def subplot(self, volt, curr, xx, yy, ygrad, amp, window=plt, xlabel=None,
-                labels=None, factor=None):
-        if factor is None:
-            factor = 1e6/9.08e3
-        # Find peaks of yy
-        peaks, _ = scipy.signal.find_peaks(
-                       ygrad*amp, height=0.006*factor*amp, distance=20, 
-                       prominence=0.003*factor*amp)
+    # Plot a single frame of the movie
+    def movie_frame(self, tt, volt, curr, xx, yy, ygrad, amp=1, window=plt,
+                    xlabel=None, labels=None, ynoise=None):
         if labels is None:
-            window.plot(volt[xx], ygrad*amp, color='#0eaa57')
-            window.plot(volt[xx], yy, color='#0e10e6')
-            window.plot(volt, curr[self.tt, :], 'grey', alpha=0.7,
-                        color='#f78f2e')
+            window.plot(self.x, self.y, color='#0eaa57')
+            # window.plot(self.x, yy, color='#0e10e6')
+            # window.plot(self.x, curr[tt, :], 'grey', alpha=0.7,
+            #             color='#f78f2e')
         else:
-            window.plot(volt[xx], ygrad*amp, label='$-dI/dV$ * {0}'.\
+            window.plot(self.x, self.y, label='$-dI/dV$ * {0}'.
                         format(amp), color='#0eaa57')
-            window.plot(volt[xx], yy, label='current (Savitzky-Golay)',
-                        color='#0e10e6')
-            window.plot(volt, curr[self.tt, :], alpha=0.7,
-                        label='current (original)', color='#f78f2e')
-        window.plot(volt[xx[peaks]], ygrad[peaks]*amp, 'x')
+            # window.plot(self.x, yy, label='current (Savitzky-Golay)',
+            #             color='#0e10e6')
+            # window.plot(self.x, curr[self.tt, :], alpha=0.7,
+            #             label='current (original)', color='#f78f2e')
+
+        # Plot the noise level
+        if ynoise is not None:
+            window.plot([self.x[0], self.x[-1]], [ynoise, ynoise], '--')
+
+        # Find peaks of yy and mark them
+        peaks, _ = scipy.signal.find_peaks(self.y, height=ynoise, distance=5)
+        parg = np.where((self.x[peaks] > self.guess[0]) &
+                        (self.x[peaks] < self.guess[1]))
+        peaks = peaks[parg]
+        window.plot(self.x[peaks], self.y[peaks], 'x')
+
         if window is not plt:
             if xlabel is not None:
                 window.set_xlabel('Potential [V]', fontsize=30)
             window.set_ylabel('magnitude', fontsize=30)
-            window.set_ylim([curr.min()*1.1, curr.max()*1.1])
+            window.set_ylim([self.y.min()*1.1, self.y.max()*1.5])
         else:
             if xlabel is not None:
                 window.xlabel('Potential [V]', fontsize=30)
             window.ylabel('magnitude', fontsize=30)
-            window.ylim([curr.min()*1.1, curr.max()*1.1])
+            window.ylim([self.y.min()*1.1, self.y.max()*1.5])
         window.tick_params(labelsize=20)
         window.legend(fontsize=16, loc='upper left')
 
+
+# Function to smooth the data then calculate popt
+def calc_popt(volt, curr, factor=1e6/9.08e3, snw=41, passes=3, gamp=60,
+              popt0=None, guess_range=None, **kwargs):
+    # Input only 1D array (i.e. cacurrA[tt,:])
+    # Smooth the I-V curve
+    sgx, sgy, sgyg = sgsmooth(curr*factor, nwindow=snw, repeat=passes)
+
+    # Calculate popt
+    df = dfunc(volt[sgx], sgyg*gamp, **kwargs)
+    popt = df.bestfit(rec_guess=popt0, guess_range=guess_range)
+
+    noise = 1.5*df.rms
+    return popt, sgx, sgy, sgyg, factor, noise
 
 ''' --------------------------------------------------------------------------
     JOINT DISTRIBUTION FUNCTION ANALYSIS
 ------------------------------------------------------------------------------
 '''
+
+
 class join_dfunc():
     def __init__(self, time, voltL, voltR, currL, currR, trange=None,
-                 dV=1, nstep=500, xrange=None, yrange=None, fid='fid'):
+                 dV=1, xrange=None, yrange=None, fid='fid'):
         # Store inputs
         self.time = time
         self.voltL = voltL
@@ -568,16 +771,13 @@ class join_dfunc():
 
         # Expecting trange to be an array [t1, t2] for range of movie
         if trange is None:
-            nt = len(time)
+            self.nt = len(time)
             self.t1 = 0
-            self.t2 = nt
+            self.t2 = self.nt
         else:
-            nt = trange[1] - trange[0]
+            self.nt = trange[1] - trange[0]
             self.t1 = trange[0]
             self.t2 = trange[1]
-
-        self.nstep = nstep
-        self.nframes = nt // nstep
 
         # Plotting parameters:
         if yrange is None:
@@ -595,11 +795,10 @@ class join_dfunc():
         self.arrTi = None
         self.enflag = None
 
-
     # Function to join the two distribution functions
     @staticmethod
     def set_dfunc(voltL, voltR, dataL, dataR, dV=1, nwindow=41, nwindowR=None,
-                  order=3):
+                  order=3, nosmooth=None, **kwargs):
         # Create distribution function using two data arrays.
         # Find max, cut the curve, do it for the other side, then join them
         # at the top. Normalize to the mag of one side. Inputs are IV traces.
@@ -617,34 +816,30 @@ class join_dfunc():
         vL = voltL[xL]
         vR = voltR[xR]
 
-        dfuncL = dfunc(vL, gradL)
-        dfuncR = dfunc(vR, gradR)
+        dfuncL = dfunc(vL, gradL, **kwargs)
+        dfuncR = dfunc(vR, gradR, **kwargs)
 
         # tbx.prefig()
         poptL = dfuncL.bestfit(window=None)
         poptR = dfuncR.bestfit(window=None)
         # plt.legend(fontsize=20, loc='upper left')
 
-        # Choose leftmost peak of the bimodal distribution
+        # Choose leftmost peak if it is bimodal
         def check_popt(popt, grad, vLR):
-            arg = np.argmax(grad)    # Default one-gauss peak value
+            arg = np.argmax(grad)    # Default is peak value
 
-            # Change this value if two-gauss is used
-            if popt is not None:
-                if popt[4] in [0, None]:
-                    pp = popt[0]
-                else:
-                    pp = np.min([popt[0], popt[3]])
-                arg_test = np.argmin(abs(vLR-pp))
-
-                # Probably won't make sense if arg_test is too far from arg
-                if abs(arg_test-arg)/(arg) < 0.10:
-                    arg = arg_test
-                
-                print(np.argmin(abs(vLR-popt[0])), np.argmin(abs(vLR-popt[3])),
-                      np.argmax(grad), arg)
-            else:
-                print(arg)
+            # Change this value if it is bimodal is used
+            bflag = dfunc.bimodal_test(popt)
+            if bflag is not None:
+                if popt is not None:
+                    if popt[4] in [0, None]:
+                        pp = popt[0]
+                    else:
+                        if popt[1] > popt[4]:
+                            pp = popt[0]
+                        else:
+                            pp = popt[3]  # pp = np.min([popt[0], popt[3]])
+                        arg = np.argmin(abs(vLR-pp))
             return arg
 
         argL = check_popt(poptL, gradL, vL)
@@ -669,8 +864,35 @@ class join_dfunc():
 
         return index, dfLR, vLvR
 
+    # For data that is already processed, input is volt and dfunc
+    @staticmethod
+    def join_processed(voltL, voltR, dfuncL, dfuncR):
 
-    def calc_enint(self, dt=1):
+        # Function to get all relevant parameters
+        def get_params(volt, dfunc):
+            peaks, _ = scipy.signal.find_peaks(dfunc)
+            if len(peaks) == 1:
+                arg = int(peaks[0])
+            else:
+                arg = int(np.amin(peaks[0]))
+
+            p_mag = np.amax(dfunc)
+            p_volt = np.array(volt[arg:]) - volt[arg]
+            p_slice = dfunc[arg:]
+
+            return p_mag, p_volt, p_slice
+
+        magL, vL, sliceL = get_params(voltL, dfuncL)
+        magR, vR, sliceR = get_params(voltR, dfuncR)
+
+        vLvR = np.concatenate([np.flip(-vL), vR])
+        factor = sliceR[0] / sliceL[0]
+        dfLR = np.concatenate([np.flip(sliceL)*factor, sliceR])
+        index = np.arange(-len(sliceL), len(sliceR))
+
+        return index, dfLR/np.amax(dfLR), vLvR
+
+    def calc_enint(self, dt=1, **kwargs):
         nsteps = int(len(self.currL[:, 0])/dt)
         arrTi = np.zeros(nsteps)
         for step in range(nsteps):
@@ -678,25 +900,28 @@ class join_dfunc():
             tt = dt * step
             # function can handle None
             _, dfunc, vLvR = self.set_dfunc(self.voltL, self.voltR,
-                                            self.currL[tt, :], 
-                                            self.currR[tt, :])
+                                            self.currL[tt, :],
+                                            self.currR[tt, :], **kwargs)
             arrTi[step] = enint(vLvR, dfunc)
 
         self.arrTT = self.time[[ii*dt+self.t1 for ii in range(nsteps)]]*1e3+5
         self.arrTi = arrTi
         self.enflag = 1
 
-
     # Plot Ti calculated from the energy integral
-    def plot_enint(self):
-        tbx.prefig(xlabel='time [ms]', ylabel='$T_i$ [eV]')
-        plt.title('{0} $T_i$ from energy integral (combined distribution '
+    def plot_enint(self, limTi=100):
+        tbx.prefig(xlabel='time [ms]', ylabel='average $E$ [eV]')
+        plt.title('{0} average energy (combined distribution '
                   'function)'.format(self.fid), fontsize=20)
-        plt.plot(self.arrTT, self.arrTi)
+
+        test = np.where(self.arrTi < limTi)
+        plt.plot(self.arrTT[test], self.arrTi[test])
         tbx.savefig('./img/{0}-Ti-distfunc.png'.format(self.fid))
 
+    def movie(self, nstep=500, limTi=100):
+        nframes = self.nt // nstep
+        test = np.where(self.arrTi < limTi)
 
-    def movie(self):
         # Plot movie to look at distribution function evolution
         if self.enflag is not None:
             fig = plt.figure(figsize=(16, 9))
@@ -707,18 +932,17 @@ class join_dfunc():
             ax2 = fig.add_subplot(111)
 
         def generate_frame(i):
-            tt = i*self.nstep
-
+            tt = i*nstep
             if self.enflag is not None:
                 ax1.clear()
                 ax1.set_title('{0} energy integral'.format(self.fid),
                               fontsize=25)
-                ax1.plot(self.arrTT, self.arrTi)
+                ax1.plot(self.arrTT[test], self.arrTi[test])
                 ax1.plot(np.repeat(trigtime(self.time, tt, off=self.t1), 2),
-                         [np.amin(self.arrTi)*1.1, np.amax(self.arrTi)*1.1],
-                         color='orange')
+                         [np.amin(self.arrTi[test])*1.1,
+                         np.amax(self.arrTi[test])*1.1], color='orange')
                 ax1.set_xlabel('time [ms]', fontsize=30)
-                ax1.set_ylabel('$T_i$ [eV]', fontsize=30)
+                ax1.set_ylabel('average $E$ [eV]', fontsize=30)
 
             ax2.clear()
             ax2.set_title('Distribution function (positive towards old '
@@ -730,17 +954,17 @@ class join_dfunc():
             ax2.plot(vLvR, dfunc)
             ax2.set_xlabel('Potential [V]', fontsize=30)
             ax2.set_ylabel('f(V)', fontsize=30)
-            ax2.tick_params(labelsize=20)
+            ax2.tick_params(labelsize=30)
             ax2.set_ylim(self.yrange)
             ax2.set_xlim(self.xrange)
 
             plt.tight_layout()
 
             print('\r', 'Generating frame {0}/{1} ({2:.2f}%)...'
-                  .format(i+1, self.nframes, (i+1)/self.nframes*100), end='')
+                  .format(i+1, nframes, (i+1)/nframes*100), end='')
 
         anim = animation.FuncAnimation(fig, generate_frame,
-                                       frames=self.nframes, interval=25)
+                                       frames=nframes, interval=25)
         anim.save('./videos/{0}-dfunc-combine.mp4'.format(self.fid))
 
 
@@ -748,50 +972,57 @@ class join_dfunc():
     ENERGY INTEGRAL CALCULATION
 ------------------------------------------------------------------------------
 '''
+
+
 def enint(volt, dfunc):
     den = np.sum([jj/np.sqrt(abs(ii)) for ii, jj in zip(volt, dfunc)
                  if ii != 0])
     vavg = np.sum([jj*np.sqrt(abs(ii)) for ii, jj in zip(volt, dfunc)
                   if ii != 0])
-    return vavg/den
+    return 2*vavg/den
 
 
 ''' ----------------------------------------------------------------------
     REGULAR DISTRIBUTION FUNCTION ROUTINES
 --------------------------------------------------------------------------
 '''
+
+
 def get_dfunc(cacurr, snw=41, passes=3):
     # Gets the distribution function from a single I-V plot
     nt, nvolt = cacurr.shape
     nvolt -= 2*(snw//2)
 
-    cacurr_sm = np.empty((nt,nvolt))
-    grad_sm = np.empty((nt,nvolt))
-    
+    cacurr_sm = np.empty((nt, nvolt))
+    grad_sm = np.empty((nt, nvolt))
+
     for tt in range(nt):
         tbx.progress_bar(tt, nt, label='tt')
-        x, y, grad = sgsmooth(cacurr[tt,:], nwindow=snw, repeat=passes)
-        cacurr_sm[tt,:] = y
-        grad_sm[tt,:] = grad
+        x, y, grad = sgsmooth(cacurr[tt, :], nwindow=snw, repeat=passes)
+        cacurr_sm[tt, :] = y
+        grad_sm[tt, :] = grad
     return x, cacurr_sm, grad_sm
 
 
-def get_dfunc2(cacurrL, cacurrR, voltL, voltR, snw=41, order=3):
+def get_dfunc2(cacurrL, cacurrR, voltL, voltR, nwindow=41, order=3, dt=1):
     # Joins two distribution functions from two different I-V plots
     nt, nvolt = cacurrL.shape
+    nt = int(nt/dt)
     dV = (voltL[-1]-voltL[0])/(nvolt-1)
     nv = nvolt//2
     vrange = np.arange(-nv, nv+1) * dV
 
-    dfunc_arr = np.empty((nt,nvolt))
+    dfunc_arr = np.empty((nt, nvolt))
 
-    for tt in range(0,nt):
-        tbx.progress_bar(tt, nt, label='tt')
-        index, func, revolt = dfunc(cacurrL[tt,:], cacurrR[tt,:],
-                                    voltL=voltL, voltR=voltR)
+    for ii in range(0, nt):
+        tt = dt * ii
+        tbx.progress_bar(ii, nt, label='tt')
+        index, func, revolt = join_dfunc.set_dfunc(
+                                voltL, voltR, cacurrL[tt, :], cacurrR[tt, :],
+                                nwindow=nwindow, order=order)
         index += nv
-        aaa = np.where((index>=0) & (index<vrange.shape))
-        dfunc_arr[tt, index] = func
+        # aaa = np.where((index >= 0) & (index < vrange.shape))
+        dfunc_arr[ii, index] = func
 
     return vrange, dfunc_arr
 
@@ -800,6 +1031,8 @@ def get_dfunc2(cacurrL, cacurrR, voltL, voltR, snw=41, order=3):
     REGULAR NON-CLASS FUNCTIONS
 --------------------------------------------------------------------------
 '''
+
+
 def trigtime(time, ind, start=5, off=0):
     # Determines the actual time (in ms) from the start of the discharge
     # start: [ms] the start time of the trigger (recorded)
@@ -896,10 +1129,10 @@ def find_Ti_exp(volt, curr, startpx=100, endpx=100, plot=0, mstime=0,
     if plot != 0:
         tbx.prefig(xlabel='Discriminator grid voltage [V]',
                    ylabel='Current [$\mu$A]')
-        plt.plot(volt, temp, color='#0e10e6')  # ,label='{0} ms'.format(mstime), 
+        plt.plot(volt, temp, color='#0e10e6')  # ,label='{0} ms'.format(mstime)
         plt.title('exponential fit, t = {0:.2f} ms'.format(mstime),
                   fontsize=20)
-        #plt.plot(volt[argmin:], temp[argmin:], color='#9208e7')
+        # plt.plot(volt[argmin:], temp[argmin:], color='#9208e7')
         plt.plot(volt, [vstart for ii in volt], '--', color='#5cd05b')
         plt.plot(volt, [vend for ii in volt], '--', color='#5cd05b')
         plt.plot(volt[argmin-20:], exp_func(volt[argmin-20:], *popt), '--',
@@ -931,6 +1164,8 @@ def select_peaks(step_arr, argtime_arr, peakcurr_arr, step=0, trange=None):
     PLOTTING FUNCTIONS
 --------------------------------------------------------------------------
 '''
+
+
 def plot_volt(volt):
     tbx.prefig(xlabel='step', ylabel='voltage [V]')
     plt.plot(volt)
@@ -978,6 +1213,8 @@ def browse_data(data, x=None, y=None, step=0, shot=0, chan=0, trange=None):
     NAMING FUNCTIONS
 --------------------------------------------------------------------------
 '''
+
+
 def fname_gen(series, date='2021-01-28', folder='/data/swjtang/RFEA/',
               ch=2):
     # Plots the current derivative -dI/dV
@@ -988,6 +1225,8 @@ def fname_gen(series, date='2021-01-28', folder='/data/swjtang/RFEA/',
     DISTRIBUTION FUNCTIONS & SMOOTHING
 --------------------------------------------------------------------------
 '''
+
+
 def rsmooth(data, repeat=2, nwindow=31, **kwargs):
     temp = data
     while repeat > 0:

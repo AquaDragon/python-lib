@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           25 Jan 2022
+DATE:           05 Feb 2023
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -463,7 +463,7 @@ class dfunc():
 
         a1 = np.amax(self.y)
         argb1 = np.argwhere(self.y > np.amax(self.y)/2)
-        b1 = (self.x[argb1[-1]]-self.x[argb1[0]])/(2*np.sqrt(2*np.log(2)))
+        b1 = (self.x[argb1[-1]][0]-self.x[argb1[0]][0])/(2*np.sqrt(2*np.log(2)))
         a2 = self.update_rms()    # this is self.rms
 
         def xrpct(pct):
@@ -490,12 +490,12 @@ class dfunc():
                 if a2 > a1:
                     guess = [mu2, a2, b2, mu1, a1, b1, c]
         elif len(peaks) == 1:
-            w1 = prop['width_heights'][parg]
+            w1 = prop['width_heights'][parg][0]
             if self.x[peaks]-xrpct(0.71) > self.x[peaks]-xrpct(0.32):
                 guess_x2 = xrpct(0.32)
             else:
                 guess_x2 = xrpct(0.71)
-            guess = [self.x[peaks], self.y[peaks], np.amin([15, dx*w1]),
+            guess = [self.x[peaks][0], self.y[peaks][0], np.amin([15, dx*w1]),
                      guess_x2, a2, 12, 0]
         else:
             # Guess from plot
@@ -530,7 +530,7 @@ class dfunc():
                                                p0=guess, bounds=bounds)
             # Add case: Have to use bimodal if double peaked
             if bm or (self.bimodal_test(popt) is not None) or \
-                    (popt[4] is not 0):
+                    (popt[4] != 0):
                 # Rejection cases for bimodal:
                 #   1. The choice of fit is unimodal/Maxwellian
                 if onegauss is not None:
@@ -565,30 +565,42 @@ class dfunc():
     # Plot components of the distribution function ---------------------------
     def dfplot(self, x, y, popt, lsq, fitfunc, color='red', window=None,
                label=None, **kwargs):
+        color = 'red' #0e10e6' # for PRL figure consistency
         # Given popt, figure out if unimodal or bimodal
         if self.bimodal_test(popt) is not None:
             bu = 'Bimodal'    # Bimodal
         else:
             bu = 'Unimodal'   # Unimodal
 
+        if np.sign(popt[6]) >= 0:
+            csign = '+'
+        else:
+            csign = ' '
         if fitfunc is self.twogauss_func:
-            wlabel = '{0}: '.format(bu) + \
-                     '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
-                     '$x_2$ = {4:.2f}, $A_2$ = {5:.2f}, $b_2$ = {6:.2f}, '\
-                     '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
+            # wlabel = '{0}: '.format(bu) + \
+            #          '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
+            #          '$x_2$ = {4:.2f}, $A_2$ = {5:.2f}, $b_2$ = {6:.2f}, '\
+            #          '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
+            wlabel = r'${1:.1f} * exp\left(-\dfrac{{(V-{0:.1f})^2}}{{2*({2:.1f})^2}}\right) + $'\
+                     r'${4:.1f} * exp\left(-\dfrac{{(V-{3:.1f})^2}}{{2*({5:.1f})^2}}\right) {7} $'\
+                     r'${6:.2f}$'.format(*popt, csign)
             # A2
             window.plot(x, self.gauss(x, popt[3], popt[4], popt[5], popt[6]),
-                        color=color, alpha=0.3)
+                        '--', linewidth=3, color=color, alpha=0.7)
         else:
             bu = 'Unimodal'   # Unimodal
-            wlabel = '{0}: '.format(bu) + \
-                     '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
-                     '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
+            # wlabel = '{0}: '.format(bu) + \
+            #          '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
+            #          '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
+            wlabel = r'${1:.1f} * exp\left(-\dfrac{{(V-{0:.1f})^2}}{{2*({2:.1f})^2}}\right) + $'\
+                     '{6:.2f}'.format(*popt)
 
-        window.plot(x, fitfunc(x, *popt), label=wlabel, color=color)
+        # swap wlabel
+        window.plot(x, fitfunc(x, *popt), label='Bi-Maxwellian (best fit)', color=color,
+                    linewidth=5)
         # A1
-        window.plot(x, self.gauss(x, popt[0], popt[1], popt[2], popt[6]),
-                    color=color, alpha=0.3)
+        window.plot(x, self.gauss(x, popt[0], popt[1], popt[2], popt[6]), 
+                    '--', linewidth=3, color=color, alpha=0.7)
 
     # Multiple function analysis. Plot best curve from least squares. --------
     def bestfit(self, rec_guess=None, window=None, lsq=1e6, **kwargs):
@@ -695,41 +707,45 @@ class dfunc():
     def movie_frame(self, tt, volt, curr, xx, yy, ygrad, amp=1, window=plt,
                     xlabel=None, labels=None, ynoise=None):
         if labels is None:
-            window.plot(self.x, self.y, color='#0eaa57')
+            labeltext = ''
             # window.plot(self.x, yy, color='#0e10e6')
             # window.plot(self.x, curr[tt, :], 'grey', alpha=0.7,
             #             color='#f78f2e')
         else:
-            window.plot(self.x, self.y, label='$-dI/dV$ * {0}'.
-                        format(amp), color='#0eaa57')
+            labeltext = '$-dI/dV$ * {0}'.format(amp)
             # window.plot(self.x, yy, label='current (Savitzky-Golay)',
             #             color='#0e10e6')
             # window.plot(self.x, curr[self.tt, :], alpha=0.7,
             #             label='current (original)', color='#f78f2e')
 
+        window.plot(self.x, self.y, label=labeltext, color='blue', alpha=0.75)
+
         # Plot the noise level
         if ynoise is not None:
-            window.plot([self.x[0], self.x[-1]], [ynoise, ynoise], '--')
+            window.fill_between([self.x[0], self.x[-1]], [ynoise, ynoise], [0,0],
+                                color='green', alpha=0.1)
 
         # Find peaks of yy and mark them
         peaks, _ = scipy.signal.find_peaks(self.y, height=ynoise, distance=5)
         parg = np.where((self.x[peaks] > self.guess[0]) &
                         (self.x[peaks] < self.guess[1]))
         peaks = peaks[parg]
-        window.plot(self.x[peaks], self.y[peaks], 'x')
+        #window.plot(self.x[peaks], self.y[peaks], 'x')  # disable for PRL
 
         if window is not plt:
             if xlabel is not None:
-                window.set_xlabel('Potential [V]', fontsize=30)
-            window.set_ylabel('magnitude', fontsize=30)
-            window.set_ylim([self.y.min()*1.1, self.y.max()*1.5])
+                window.set_xlabel('Discriminator Grid Voltage [V]', fontsize=40)
+            window.set_ylabel('arb. units', fontsize=40)
+            window.set_ylim(-25, 220) #PRL
+            #window.set_ylim([self.y.min()*1.1, self.y.max()*1.5])
         else:
             if xlabel is not None:
                 window.xlabel('Potential [V]', fontsize=30)
             window.ylabel('magnitude', fontsize=30)
-            window.ylim([self.y.min()*1.1, self.y.max()*1.5])
-        window.tick_params(labelsize=20)
-        window.legend(fontsize=16, loc='upper left')
+            #window.ylim([self.y.min()*1.1, self.y.max()*1.5])
+            window.ylim(-25, 220) #PRL
+        window.tick_params(labelsize=30)
+        window.legend(fontsize=25, loc='upper left')
 
 
 # Function to smooth the data then calculate popt
@@ -871,10 +887,13 @@ class join_dfunc():
         # Function to get all relevant parameters
         def get_params(volt, dfunc):
             peaks, _ = scipy.signal.find_peaks(dfunc)
-            if len(peaks) == 1:
-                arg = int(peaks[0])
-            else:
-                arg = int(np.amin(peaks[0]))
+            try:
+                if len(peaks) == 1:
+                    arg = int(peaks[0])
+                else:
+                    arg = int(np.amin(peaks[0]))
+            except:
+                print(dfunc)
 
             p_mag = np.amax(dfunc)
             p_volt = np.array(volt[arg:]) - volt[arg]
@@ -1127,8 +1146,8 @@ def find_Ti_exp(volt, curr, startpx=100, endpx=100, plot=0, mstime=0,
     Ti_err = np.sqrt(np.diag(pcov))[1]
 
     if plot != 0:
-        tbx.prefig(xlabel='Discriminator grid voltage [V]',
-                   ylabel='Current [$\mu$A]')
+        tbx.prefig(xlabel='Discriminator Grid Voltage (V)',
+                   ylabel='Current ($\mu$A)')
         plt.plot(volt, temp, color='#0e10e6')  # ,label='{0} ms'.format(mstime)
         plt.title('exponential fit, t = {0:.2f} ms'.format(mstime),
                   fontsize=20)

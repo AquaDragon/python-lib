@@ -1,7 +1,7 @@
 '''
 NAME:           toolbox.py
 AUTHOR:         swjtang
-DATE:           25 Jan 2022
+DATE:           17 May 2023
 DESCRIPTION:    A toolbox of commonly used functions.
 ----------------------------------------------------------------------------
 to reload module:
@@ -13,7 +13,6 @@ import copy
 from matplotlib import pyplot as plt
 import numpy as np
 import os
-import pickle
 from scipy.io.idl import readsav    # for read_IDL_sav
 import scipy.signal
 
@@ -115,43 +114,66 @@ def bint(*args, **kwargs):
     return bdot.bint(*args, **kwargs)
 
 
-def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=None):
+def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=None,
+               frange=None, trange=None, tyrange=None):
     ''' ----------------------------------------------------------------------
-    A function to apply filters to a data set (non-FFT).
+        A function to apply filters to a data set (non-FFT).
         (IDL: filterfreq.pro)
     '''
     # Set default frange
     if frange is None:
         frange = [0, 50]
 
+    # Set default trange
+    if trange is None:
+        trange = [None, None]
+    if tyrange is None:
+        tyrange = [None, None]
+
     fftarr = np.fft.fft(data, norm='ortho')
     freqarr = np.fft.fftfreq(len(time), time[1]-time[0])
     freqarr /= 1e3    # [kHz]
+    if debug is not None:
+        print('Max freq = {0:.2f} [kHz]'.format(np.amax(freqarr)))
 
-    # determine filter type ------------------------------------------------
+    # -------------------------------------------
+    #   Determine filter type
+    # -------------------------------------------
+    # FILTER 0 (default) = no filter
     if ftype == 0:
-        output = fftarr
         tempfilter = [1 for ii in range(len(fftarr))]
-    elif ftype in [1, 'low', 2, 'high']:    # high/low-pass
+
+    # FILTER 1 = high-pass / FILTER 2 = low-pass
+    elif ftype in [1, 'low', 2, 'high']:
         cutoff = value_locate_arg(freqarr, f0)
         tempfilter = np.exp(-(freqarr-f0)**2/(2*width**2))
 
         tempfilter[:cutoff] = 1  # compute as low-pass
-        for ii in range(int(len(tempfilter)/2)+1):
-            tempfilter[-ii] = tempfilter[ii]
-
         if ftype in [2, 'high']:
             tempfilter = [1-ii for ii in tempfilter]  # high-pass
+
+    # FILTER 3: gaussian
     elif ftype in [3, 'gaussian']:
         tempfilter = np.exp(-(freqarr-f0)**2/(2*width**2))
-        for ii in range(int(len(tempfilter)/2)+1):
-            tempfilter[-ii] = tempfilter[ii]
+
+    # FILTER 9: remove square wave
+    elif ftype == 9:
+        sqfreq = [1.0, 3.0, 5.0, 7.0, 9.0, 11.0]
+        sqwidth = 0.1
+        tempfilter = np.zeros(len(freqarr))
+        for ii in sqfreq:
+            tempfilter += np.exp(-(freqarr-ii)**2/(2*sqwidth**2))
+        tempfilter = [1-ii for ii in tempfilter]
+
+    # filter applied to negative frequencies
+    for ii in range(int(len(tempfilter)/2)+1):
+        tempfilter[-ii] = tempfilter[ii]
 
     tempfilter = np.array(tempfilter)
     data_filtered = np.fft.ifft(np.array(fftarr)*tempfilter, norm='ortho')
 
     # plot graphs for debug ------------------------------------------------
-    if debug != 0:
+    if (debug != 0) and (debug is not None):
         def norm_data(data):
             temp = abs(data)
             temp /= np.max(temp)
@@ -163,35 +185,41 @@ def filterfreq(data, time, ftype=0, f0=0, width=1.0, debug=0, frange=None):
         # sorted indices (for negative frequencies)
         sort_ind = np.argsort(freqarr)
 
-        fig = plt.figure(figsize=(8, 9))
+        fig = plt.figure(figsize=(12, 9))
         # plot the FFT graphs ----------------------------------------------
         ax1 = fig.add_subplot(211)
-        plt.plot(freqarr[sort_ind], norm_fftarr[sort_ind])
-        plt.plot(freqarr[sort_ind], norm_filtered[sort_ind], alpha=0.7)
+        ax1.plot(freqarr[sort_ind], norm_fftarr[sort_ind],
+                 label='original FFT')
+        ax1.plot(freqarr[sort_ind], norm_filtered[sort_ind], alpha=0.7,
+                 label='filtered FFT')
 
-        plt.title('[Debug] FFT filter range', fontsize=18)
-        plt.xlabel('Frequency [kHz]', fontsize=20)
-        plt.ylabel('Amplitude', fontsize=20)
+        ax1.set_title('[Debug] FFT filter range', fontsize=20)
+        ax1.set_xlabel('Frequency [kHz]', fontsize=25)
+        ax1.set_ylabel('Amplitude', fontsize=25)
 
+        # Define plotting ranges
         x1, x2 = frange[0], frange[1]
         x1_ind = value_locate_arg(freqarr, x1)
         x2_ind = value_locate_arg(freqarr, x2)
         y2 = np.amax(abs(norm_fftarr[x1_ind:x2_ind]))
-        plt.xlim([x1, x2])
-        plt.ylim([0, 1.05*y2])
-        plt.plot(freqarr[sort_ind], tempfilter[sort_ind]*y2, 'g--', alpha=0.5)
-        plt.legend(['original', 'filtered', 'filter (norm to graph)'],
-                   fontsize=14)
+        ax1.set_xlim(x1, x2)
+        ax1.set_ylim(0, 1.05*y2)
+        ax1.plot(freqarr[sort_ind], tempfilter[sort_ind]*y2, 'g--', alpha=0.5,
+                 label='filter setting')
+        ax1.legend(fontsize=18)
 
         # plot the data graphs ----------------------------------------------
         ax2 = fig.add_subplot(212)
-        plt.plot(np.array(time)*1e3, data)
-        plt.plot(np.array(time)*1e3, np.real(data_filtered))
+        ax2.plot(np.array(time)*1e3, data, label='original data')
+        ax2.plot(np.array(time)*1e3, np.real(data_filtered),
+                 label='filtered data')
 
-        plt.title('[Debug] Data with/without filter', fontsize=18)
-        plt.xlabel('Time [ms]', fontsize=20)
-        plt.ylabel('Amplitude', fontsize=20)
-        plt.legend(['original', 'filtered'], fontsize=14)
+        ax2.set_title('[Debug] Data with/without filter', fontsize=20)
+        ax2.set_xlabel('Time [ms]', fontsize=25)
+        ax2.set_ylabel('Amplitude', fontsize=25)
+        ax2.legend(fontsize=18)
+        ax2.set_xlim(trange[0], trange[1])
+        ax2.set_ylim(tyrange[0], tyrange[1])
 
         plt.tight_layout()
         # fig.savefig('temp2.png', bbox_inches='tight')
@@ -407,29 +435,29 @@ def curl(Bx, By, x, y):
     return dxBy - dyBx
 
 
-def rungeKutta(x0, y0, x, h):
-    ''' ----------------------------------------------------------------------
-    4th order Runge-Kutta. Finds value of y for a given x using step size h
-    and initial value y0 at x0.
-        (IDL: RK4.pro)
-    '''
-    # Count number of iterations using step size or step height h
-    n = (int)((x - x0)/h)
-    # Iterate for number of iterations
-    y = y0
-    for i in range(1, n + 1):
-        # Apply Runge-Kutta Formulas to find next value of y
-        k1 = h * dydx(x0, y)
-        k2 = h * dydx(x0 + 0.5*h, y + 0.5*k1)
-        k3 = h * dydx(x0 + 0.5*h, y + 0.5*k2)
-        k4 = h * dydx(x0 + h, y + k3)
+# def rungeKutta(x0, y0, x, h):
+#     ''' ---------------------------------------------------------------------
+#     4th order Runge-Kutta. Finds value of y for a given x using step size h
+#     and initial value y0 at x0.
+#         (IDL: RK4.pro)
+#     '''
+#     # Count number of iterations using step size or step height h
+#     n = (int)((x - x0)/h)
+#     # Iterate for number of iterations
+#     y = y0
+#     for i in range(1, n + 1):
+#         # Apply Runge-Kutta Formulas to find next value of y
+#         k1 = h * dydx(x0, y)
+#         k2 = h * dydx(x0 + 0.5*h, y + 0.5*k1)
+#         k3 = h * dydx(x0 + 0.5*h, y + 0.5*k2)
+#         k4 = h * dydx(x0 + h, y + k3)
 
-        # Update next value of y
-        y = y + (1.0 / 6.0)*(k1 + 2*k2 + 2*k3 + k4)
+#         # Update next value of y
+#         y = y + (1.0 / 6.0)*(k1 + 2*k2 + 2*k3 + k4)
 
-        # Update next value of x
-        x0 = x0 + h
-    return y
+#         # Update next value of x
+#         x0 = x0 + h
+#     return y
 
 
 def check_save_filepath(save, file_type):
@@ -534,7 +562,7 @@ def savefig(*args, **kwargs):
 
 
 ''' --------------------------------------------------------------------------
-    B-DOT PROBE ROUTINES
+    BaPSF/LAPD B-DOT PROBE ROUTINES
 ------------------------------------------------------------------------------
 '''
 

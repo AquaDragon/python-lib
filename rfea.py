@@ -1,7 +1,7 @@
 '''
 NAME:           rfea.py
 AUTHOR:         swjtang
-DATE:           05 Feb 2023
+DATE:           21 May 2023
 DESCRIPTION:    A toolbox of functions related to energy analyzer analysis.
 ------------------------------------------------------------------------------
 to reload module:
@@ -9,20 +9,16 @@ import importlib
 importlib.reload(<module>)
 ------------------------------------------------------------------------------
 '''
-import h5py
-import importlib
 import numpy as np
 import numpy.polynomial.polynomial as poly
-import re
 import scipy
-from scipy.optimize import curve_fit
+# from scipy.optimize import curve_fit
 from matplotlib import animation, pyplot as plt
 
 import lib.find_multiref_phase as fmp
 import lib.fname_tds as fn
 import lib.read_lapd_data as rd
 import lib.toolbox as tbx
-import lib.spikes as spike
 
 
 class params(object):
@@ -348,7 +344,7 @@ class data():
             times = [15000, 17500, 20000, 25000, 30000]
 
         # IV response
-        tbx.prefig(xlabel='Peak pulse voltage [V]', ylabel='Current [$\mu$A]')
+        tbx.prefig(xlabel='Peak pulse voltage [V]', ylabel='Current [$\\mu$A]')
         for tt in times:
             plt.plot(volt, curr[tt, :], label='{0:.2f} ms'.format(
                      self.mstime(tt, start=5)))
@@ -463,7 +459,8 @@ class dfunc():
 
         a1 = np.amax(self.y)
         argb1 = np.argwhere(self.y > np.amax(self.y)/2)
-        b1 = (self.x[argb1[-1]][0]-self.x[argb1[0]][0])/(2*np.sqrt(2*np.log(2)))
+        b1 = (self.x[argb1[-1]][0] - self.x[argb1[0]][0]) / (
+            2*np.sqrt(2*np.log(2)))
         a2 = self.update_rms()    # this is self.rms
 
         def xrpct(pct):
@@ -526,8 +523,9 @@ class dfunc():
             fitfunc = self.onegauss_func
 
         try:
-            popt, _ = scipy.optimize.curve_fit(fitfunc, self.x, self.y,
-                                               p0=guess, bounds=bounds)
+            popt, pcov = scipy.optimize.curve_fit(fitfunc, self.x, self.y,
+                                                  p0=guess, bounds=bounds)
+            perr = np.sqrt(np.diag(pcov))  # one std. dev. error
             # Add case: Have to use bimodal if double peaked
             if bm or (self.bimodal_test(popt) is not None) or \
                     (popt[4] != 0):
@@ -558,48 +556,47 @@ class dfunc():
             # Calculate least squares for error
             arg = np.argwhere(self.y > 1.5*self.rms)
             lsq = np.sum((self.y[arg] - fitfunc(self.x[arg], *popt))**2)
-            return popt, lsq
+            return popt, lsq, perr
         except (RuntimeError, ValueError):
-            return None, None
+            return None, None, None
 
     # Plot components of the distribution function ---------------------------
     def dfplot(self, x, y, popt, lsq, fitfunc, color='red', window=None,
                label=None, **kwargs):
-        color = 'red' #0e10e6' # for PRL figure consistency
+        color = 'red'  # 0e10e6' # for PRL figure consistency
         # Given popt, figure out if unimodal or bimodal
-        if self.bimodal_test(popt) is not None:
-            bu = 'Bimodal'    # Bimodal
-        else:
-            bu = 'Unimodal'   # Unimodal
+        # if self.bimodal_test(popt) is not None:
+        #     bu = 'Bimodal'    # Bimodal
+        # else:
+        #     bu = 'Unimodal'   # Unimodal
 
-        if np.sign(popt[6]) >= 0:
-            csign = '+'
-        else:
-            csign = ' '
+        # if np.sign(popt[6]) >= 0:
+        #     csign = '+'
+        # else:
+        #     csign = ' '
         if fitfunc is self.twogauss_func:
             # wlabel = '{0}: '.format(bu) + \
             #          '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
             #          '$x_2$ = {4:.2f}, $A_2$ = {5:.2f}, $b_2$ = {6:.2f}, '\
             #          '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
-            wlabel = r'${1:.1f} * exp\left(-\dfrac{{(V-{0:.1f})^2}}{{2*({2:.1f})^2}}\right) + $'\
-                     r'${4:.1f} * exp\left(-\dfrac{{(V-{3:.1f})^2}}{{2*({5:.1f})^2}}\right) {7} $'\
-                     r'${6:.2f}$'.format(*popt, csign)
+            # wlabel = r'${1:.1f} * exp\left(-\dfrac{{(V-{0:.1f})^2}}{{2*({2:.1f})^2}}\right) + $'\
+            #          r'${4:.1f} * exp\left(-\dfrac{{(V-{3:.1f})^2}}{{2*({5:.1f})^2}}\right) {7} $'\
+            #          r'${6:.2f}$'.format(*popt, csign)
             # A2
             window.plot(x, self.gauss(x, popt[3], popt[4], popt[5], popt[6]),
                         '--', linewidth=3, color=color, alpha=0.7)
-        else:
-            bu = 'Unimodal'   # Unimodal
+        # else:
             # wlabel = '{0}: '.format(bu) + \
             #          '$x_1$ = {1:.2f}, $A_1$ = {2:.2f}, $b_1$ = {3:.2f}, '\
             #          '$c$ = {7:.2f} ({8})'.format(lsq, *popt, label)
-            wlabel = r'${1:.1f} * exp\left(-\dfrac{{(V-{0:.1f})^2}}{{2*({2:.1f})^2}}\right) + $'\
-                     '{6:.2f}'.format(*popt)
+            # wlabel = r'${1:.1f} * exp\left(-\dfrac{{(V-{0:.1f})^2}}{{2*({2:.1f})^2}}\right) + $'\
+            #          '{6:.2f}'.format(*popt)
 
         # swap wlabel
-        window.plot(x, fitfunc(x, *popt), label='Bi-Maxwellian (best fit)', color=color,
-                    linewidth=5)
+        window.plot(x, fitfunc(x, *popt), label='Bi-Maxwellian (best fit)',
+                    color=color, linewidth=5)
         # A1
-        window.plot(x, self.gauss(x, popt[0], popt[1], popt[2], popt[6]), 
+        window.plot(x, self.gauss(x, popt[0], popt[1], popt[2], popt[6]),
                     '--', linewidth=3, color=color, alpha=0.7)
 
     # Multiple function analysis. Plot best curve from least squares. --------
@@ -607,7 +604,7 @@ class dfunc():
         # rec_guess = A guess value to be passed to check for better guesses
 
         # Guess #1: Maxwellian / unimodal
-        popt, lsq1 = self.gaussfit(onegauss=1, **kwargs)
+        popt, lsq1, perr = self.gaussfit(onegauss=1, **kwargs)
         if lsq1 is not None:
             if (lsq1 < lsq):
                 popt[4] = 0
@@ -616,7 +613,7 @@ class dfunc():
                 fitfunc = self.onegauss_func
 
         # Guess #2: Maxwellian + beam / bimodal
-        popt2, lsq2 = self.gaussfit(**kwargs)
+        popt2, lsq2, perr2 = self.gaussfit(**kwargs)
         # print('popt2', popt2, lsq2)
         # More conditions for rejecting a bimodal distribution
         if (lsq2 is not None) and (popt2 is not None) and (popt is not None):
@@ -625,12 +622,12 @@ class dfunc():
                 pass
             # The fit has to improve least squares by at least a factor of 10
             elif (lsq2 < 0.1*lsq) and (popt2[4] != 0):
-                popt, lsq = popt2, lsq2
+                popt, lsq, perr = popt2, lsq2, perr2
                 color = 'red'
                 fitfunc = self.twogauss_func
 
         # # If an improved guess is submitted, use that
-        popt3, lsq3 = self.gaussfit(guess=rec_guess, **kwargs)
+        popt3, lsq3, perr3 = self.gaussfit(guess=rec_guess, **kwargs)
         # print('popt2', popt2, lsq2)
         # More conditions for rejecting a bimodal distribution
         if (lsq3 is not None) and (popt3 is not None) and (popt is not None):
@@ -639,14 +636,14 @@ class dfunc():
                 pass
             # The fit has to improve least squares by at least a factor of 10
             elif (lsq3 < 0.1*lsq) and (popt3[4] != 0):
-                popt, lsq = popt3, lsq3
+                popt, lsq, perr = popt3, lsq3, perr3
                 color = 'purple'
                 fitfunc = self.twogauss_func
 
         if (window is not None) and (popt is not None):
             self.dfplot(self.x, self.y, popt, lsq, fitfunc, window=window,
                         color=color, label='{0:.2f}'.format(lsq))
-        return popt
+        return popt, perr
 
     # Test of bimodality by Robertson & Fryer (1969), Scandainavian
     # Actuarial Journal
@@ -722,28 +719,29 @@ class dfunc():
 
         # Plot the noise level
         if ynoise is not None:
-            window.fill_between([self.x[0], self.x[-1]], [ynoise, ynoise], [0,0],
-                                color='green', alpha=0.1)
+            window.fill_between([self.x[0], self.x[-1]], [ynoise, ynoise],
+                                [0, 0], color='green', alpha=0.1)
 
         # Find peaks of yy and mark them
         peaks, _ = scipy.signal.find_peaks(self.y, height=ynoise, distance=5)
         parg = np.where((self.x[peaks] > self.guess[0]) &
                         (self.x[peaks] < self.guess[1]))
         peaks = peaks[parg]
-        #window.plot(self.x[peaks], self.y[peaks], 'x')  # disable for PRL
+        # window.plot(self.x[peaks], self.y[peaks], 'x')  # disable for PRL
 
         if window is not plt:
             if xlabel is not None:
-                window.set_xlabel('Discriminator Grid Voltage [V]', fontsize=40)
+                window.set_xlabel('Discriminator Grid Voltage [V]',
+                                  fontsize=40)
             window.set_ylabel('arb. units', fontsize=40)
-            window.set_ylim(-25, 220) #PRL
-            #window.set_ylim([self.y.min()*1.1, self.y.max()*1.5])
+            window.set_ylim(-25, 220)  # PRL
+            # window.set_ylim([self.y.min()*1.1, self.y.max()*1.5])
         else:
             if xlabel is not None:
                 window.xlabel('Potential [V]', fontsize=30)
             window.ylabel('magnitude', fontsize=30)
-            #window.ylim([self.y.min()*1.1, self.y.max()*1.5])
-            window.ylim(-25, 220) #PRL
+            # window.ylim([self.y.min()*1.1, self.y.max()*1.5])
+            window.ylim(-25, 220)  # PRL
         window.tick_params(labelsize=30)
         window.legend(fontsize=25, loc='upper left')
 
@@ -757,10 +755,11 @@ def calc_popt(volt, curr, factor=1e6/9.08e3, snw=41, passes=3, gamp=60,
 
     # Calculate popt
     df = dfunc(volt[sgx], sgyg*gamp, **kwargs)
-    popt = df.bestfit(rec_guess=popt0, guess_range=guess_range)
+    popt, perr = df.bestfit(rec_guess=popt0, guess_range=guess_range)
 
     noise = 1.5*df.rms
-    return popt, sgx, sgy, sgyg, factor, noise
+    return popt, sgx, sgy, sgyg, factor, noise, perr
+
 
 ''' --------------------------------------------------------------------------
     JOINT DISTRIBUTION FUNCTION ANALYSIS
@@ -836,8 +835,8 @@ class join_dfunc():
         dfuncR = dfunc(vR, gradR, **kwargs)
 
         # tbx.prefig()
-        poptL = dfuncL.bestfit(window=None)
-        poptR = dfuncR.bestfit(window=None)
+        poptL, _ = dfuncL.bestfit(window=None)  # 2nd arg = perrL
+        poptR, _ = dfuncR.bestfit(window=None)  # 2nd arg = perrR
         # plt.legend(fontsize=20, loc='upper left')
 
         # Choose leftmost peak if it is bimodal
@@ -882,7 +881,7 @@ class join_dfunc():
 
     # For data that is already processed, input is volt and dfunc
     @staticmethod
-    def join_processed(voltL, voltR, dfuncL, dfuncR):
+    def join_processed(voltL, voltR, dfuncL, dfuncR, raw=None):
 
         # Function to get all relevant parameters
         def get_params(volt, dfunc):
@@ -909,7 +908,10 @@ class join_dfunc():
         dfLR = np.concatenate([np.flip(sliceL)*factor, sliceR])
         index = np.arange(-len(sliceL), len(sliceR))
 
-        return index, dfLR/np.amax(dfLR), vLvR
+        if raw is not None:
+            return vL, vR, sliceL, sliceR, factor
+        else:
+            return index, dfLR/np.amax(dfLR), vLvR
 
     def calc_enint(self, dt=1, **kwargs):
         nsteps = int(len(self.currL[:, 0])/dt)
@@ -999,6 +1001,144 @@ def enint(volt, dfunc):
     vavg = np.sum([jj*np.sqrt(abs(ii)) for ii, jj in zip(volt, dfunc)
                   if ii != 0])
     return 2*vavg/den
+
+
+def enint_err(voltL, voltR, dfuncL, dfuncR, poptL, poptR, perrL, perrR):
+    # Generate data arrays
+    vL, vR, sliceL, sliceR, factor = join_dfunc.join_processed(
+        voltL, voltR, dfuncL, dfuncR, raw=1)
+    _, dfLR, vLvR = join_dfunc.join_processed(voltL, voltR, dfuncL, dfuncR)
+
+    # All fitted coefficients of the bi-Maxwellian
+    mu1L, a1L, b1L, mu2L, a2L, b2L, cL = poptL
+    mu1R, a1R, b1R, mu2R, a2R, b2R, cR = poptR
+
+    # All errors associated with fitted coefficients
+    errmu1L, erra1L, errb1L, errmu2L, erra2L, errb2L, errcL = perrL
+    errmu1R, erra1R, errb1R, errmu2R, erra2R, errb2R, errcR = perrR
+
+    perr = [np.amax([ii*factor, jj]) for ii, jj in zip(perrL, perrR)]
+
+    # List all differentials of f(E)
+    dfda1L = np.exp(-vL**2/(2*b1L**2))
+    dfdb1L = a1L * np.exp(-vL**2/(2*b1L**2)) * (vL**2/b1L**3)
+    dfdmu1L = a2L * np.exp(-(vL-mu2L+mu1L)**2/(2*b2L**2)) * (
+        -(vL-mu2L+mu1L)/(b2L**2))
+    dfdcL = np.ones(vL.size)
+    if a2L == 0:
+        dfda2L = np.zeros(vL.size)
+        dfdb2L = np.zeros(vL.size)
+        dfdmu2L = np.zeros(vL.size)
+    else:
+        dfda2L = np.exp(-(vL-mu2L+mu1L)**2/(2*b2L**2))
+        dfdb2L = a2L * np.exp(-(vL-mu2L+mu1L)**2/(2*b2L**2)) * (
+            (vL-mu2L+mu1L)**2/b1L**3)
+        dfdmu2L = a2L * np.exp(-(vL-mu2L+mu1L)**2/(2*b2L**2)) * (
+            (vL-mu2L+mu1L)/(b2L**2))
+
+    dfda1R = np.exp(-vR**2/(2*b1R**2))
+    dfdb1R = a1R * np.exp(-vR**2/(2*b1R**2)) * (vR**2/b1R**3)
+    dfdmu1R = a2R * np.exp(-(vR-mu2R+mu1R)**2/(2*b2R**2)) * (
+        -(vR-mu2R+mu1R)/(b2R**2))
+    dfdcR = np.ones(vR.size)
+    if a2R == 0:
+        dfda2R = np.zeros(vR.size)
+        dfdb2R = np.zeros(vR.size)
+        dfdmu2R = np.zeros(vR.size)
+    else:
+        dfda2R = np.exp(-(vR-mu2R+mu1R)**2/(2*b2R**2))
+        dfdb2R = a2R * np.exp(-(vR-mu2R+mu1R)**2/(2*b2R**2)) * (
+            (vR-mu2R+mu1R)**2/b1R**3)
+        dfdmu2R = a2R * np.exp(-(vR-mu2R+mu1R)**2/(2*b2R**2)) * (
+            (vR-mu2R+mu1R)/(b2R**2))
+
+    # NUMERATOR calculation
+    num = 2 * np.sum([jj*np.sqrt(abs(ii)) for ii, jj in zip(vLvR, dfLR)
+                     if ii != 0])
+
+    # Define function for numerator-like summation
+    def numprod(xL, xR, yL, yR):
+        if np.amax(np.concatenate([yL*factor, yR])) == 0:
+            return 0
+        else:
+            return 2 * (
+                np.sum([jj*np.sqrt(abs(ii)) for ii, jj in zip(xL, yL)
+                       if ii != 0]) * factor +
+                np.sum([jj*np.sqrt(abs(ii)) for ii, jj in zip(xR, yR)
+                       if ii != 0])
+                ) / np.amax(np.concatenate([yL*factor, yR]))
+
+    # num_check = numprod(vL, vR, sliceL, sliceR)     # equivalent to num
+
+    # DENOMINATOR calculation
+    den = np.sum([jj/np.sqrt(abs(ii)) for ii, jj in zip(vLvR, dfLR)
+                 if ii != 0])
+
+    # Define function for denominator-like summation
+    def denprod(xL, xR, yL, yR):
+        if np.amax(np.concatenate([yL*factor, yR])) == 0:
+            return 0
+        else:
+            return (
+                np.sum([jj/np.sqrt(abs(ii)) for ii, jj in zip(xL, yL)
+                       if ii != 0]) * factor +
+                np.sum([jj/np.sqrt(abs(ii)) for ii, jj in zip(xR, yR)
+                       if ii != 0])
+                ) / np.amax(np.concatenate([yL*factor, yR]))
+
+    # den_check = denprod(vL, vR, sliceL, sliceR)     # equivalent to den
+
+    # List all differentials of NUMERATOR
+    dNda1 = numprod(vL, vR, dfda1L, dfda1R)
+    dNda2 = numprod(vL, vR, dfda2L, dfda2R)
+    dNdb1 = numprod(vL, vR, dfdb1L, dfdb1R)
+    dNdb2 = numprod(vL, vR, dfdb2L, dfdb2R)
+    dNdmu1 = numprod(vL, vR, dfdmu1L, dfdmu1R)
+    dNdmu2 = numprod(vL, vR, dfdmu2L, dfdmu2R)
+    dNdc = numprod(vL, vR, dfdcL, dfdcR)
+
+    # List all differentials of DENOMINATOR
+    dDda1 = denprod(vL, vR, dfda1L, dfda1R)
+    dDda2 = denprod(vL, vR, dfda2L, dfda2R)
+    dDdb1 = denprod(vL, vR, dfdb1L, dfdb1R)
+    dDdb2 = denprod(vL, vR, dfdb2L, dfdb2R)
+    dDdmu1 = denprod(vL, vR, dfdmu1L, dfdmu1R)
+    dDdmu2 = denprod(vL, vR, dfdmu2L, dfdmu2R)
+    dDdc = denprod(vL, vR, dfdcL, dfdcR)
+
+    # print(vL, vR, dfdcL, dfdcR, dDdc)
+
+    # Define function to calculate d<2E>/dx
+    def diff2E(num, den, dNdx, dDdx):
+        if den == 0:
+            return 0
+        else:
+            return dNdx/den - (num/den**2)*dDdx
+
+    # List all differentials of <2E>
+    d2Eda1 = diff2E(num, den, dNda1, dDda1)
+    d2Eda2 = diff2E(num, den, dNda2, dDda2)
+    d2Edb1 = diff2E(num, den, dNdb1, dDdb1)
+    d2Edb2 = diff2E(num, den, dNdb2, dDdb2)
+    d2Edmu1 = diff2E(num, den, dNdmu1, dDdmu1)
+    d2Edmu2 = diff2E(num, den, dNdmu2, dDdmu2)
+    d2Edc = diff2E(num, den, dNdc, dDdc)
+    # print(d2Eda1, d2Eda2, d2Edb1, d2Edb2, d2Edmu1, d2Edmu2, d2Edc)
+
+    # 1 Standard Deviation Error of <2E>
+    # order of perr is mu1, a1, b1, mu2, a2, b2, c
+    d2Edx_arr = [d2Edmu1, d2Eda1, d2Edb1, d2Edmu2, d2Eda2, d2Edb2, d2Edc]
+
+    var2E = [(ii*jj)**2 for ii, jj in zip(perr, d2Edx_arr)]
+    stdev2E = np.sqrt(np.sum(var2E))
+
+    # print('poptL/R', poptL, poptR)
+    # print('perr', perr)
+    # print('d2Edx_arr', d2Edx_arr)
+    # print('var2E', var2E)
+    # print('stdev2E', stdev2E)
+
+    return stdev2E
 
 
 ''' ----------------------------------------------------------------------
@@ -1097,8 +1237,10 @@ def find_Ti(xx, yy, plot=0, width=40, xmax=0, xoff=10):
 
     guess = [yy[iimax]-yy[iimin], 1, yy[iimin], xx[iimax]]
 
-    popt, pcov = curve_fit(gauss_func, xx[max(iimax-xoff, 0):iimin],
-                           yy[max(iimax-xoff, 0):iimin], p0=guess)
+    popt, pcov = scipy.optimize.curve_fit(
+        gauss_func, xx[max(iimax-xoff, 0):iimin], yy[max(iimax-xoff, 0):iimin],
+        p0=guess)
+    perr = np.sqrt(np.diag(pcov))
 
     # Plot the points if desired
     if plot != 0:
@@ -1106,7 +1248,7 @@ def find_Ti(xx, yy, plot=0, width=40, xmax=0, xoff=10):
                  gauss_func(xx[max(iimax-xoff, 0):iimin], *popt), '--')
 
     # Returns full width of gaussian; b = 1/kT = 1/(2*sigma^2)
-    return popt, pcov  # (1/np.sqrt(*popt[1]))
+    return popt, perr  # (1/np.sqrt(*popt[1]))
 
 
 def find_Ti_exp(volt, curr, startpx=100, endpx=100, plot=0, mstime=0,
@@ -1135,8 +1277,9 @@ def find_Ti_exp(volt, curr, startpx=100, endpx=100, plot=0, mstime=0,
     bound_down = [0.1*(vstart-vend), 0, vend-vstart, volt[0]]
     bound_up = [+np.inf, 50, vstart, volt[-1]]
     try:
-        popt, pcov = curve_fit(exp_func, volt[argmin:], temp[argmin:],
-                               p0=guess, bounds=(bound_down, bound_up))
+        popt, pcov = scipy.optimize.curve_fit(
+            exp_func, volt[argmin:], temp[argmin:], p0=guess,
+            bounds=(bound_down, bound_up))
     except:
         return None, None, None
 
@@ -1147,7 +1290,7 @@ def find_Ti_exp(volt, curr, startpx=100, endpx=100, plot=0, mstime=0,
 
     if plot != 0:
         tbx.prefig(xlabel='Discriminator Grid Voltage (V)',
-                   ylabel='Current ($\mu$A)')
+                   ylabel='Current ($\\mu$A)')
         plt.plot(volt, temp, color='#0e10e6')  # ,label='{0} ms'.format(mstime)
         plt.title('exponential fit, t = {0:.2f} ms'.format(mstime),
                   fontsize=20)
